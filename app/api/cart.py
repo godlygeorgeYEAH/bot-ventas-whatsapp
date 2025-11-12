@@ -382,26 +382,57 @@ async def complete_cart(
         # 4. Notificar al bot para activar CheckoutModule
         # Actualizar contexto del usuario para que CheckoutModule se active
         phone = customer.phone
-        
+
         # Crear instancia de ContextManager con la sesión de BD actual
         context_mgr = ContextManager(db)
-        
-        # Actualizar el contexto del módulo (marcar checkout como iniciado)
-        context_mgr.update_module_context(
-            phone=phone,
-            module_name="CheckoutModule",
-            context_updates={
-                "start_checkout": False,  # Ya lo iniciamos, no volver a iniciar
-                "checkout_order_id": order.id,
-                "current_module": "CheckoutModule",
-                "conversation_state": "collecting_slots",
-                "slots_data": {},  # Inicializar como dict vacío
-                "current_slot": "gps_location",  # Primer slot
-                "validation_attempts": {}  # Inicializar intentos
-            }
-        )
-        
-        logger.info(f"🔔 Contexto actualizado para {phone}: checkout iniciado, order_id={order.id}")
+
+        # Determinar qué información falta y qué slot pedir
+        # Verificar si ya tiene GPS, referencia y método de pago
+        has_gps = bool(order.delivery_latitude and order.delivery_longitude)
+        has_reference = bool(order.delivery_reference)
+        has_payment = bool(order.payment_method)
+
+        logger.info(f"📊 Estado de la orden: GPS={has_gps}, Referencia={has_reference}, Pago={has_payment}")
+
+        # Determinar el slot actual basado en lo que falta
+        if not has_gps:
+            current_slot = "gps_location"
+        elif not has_reference:
+            current_slot = "delivery_reference"
+        elif not has_payment:
+            current_slot = "payment_method"
+        else:
+            # Ya tiene toda la información
+            current_slot = None
+
+        # Si hay información faltante, activar CheckoutModule
+        if current_slot:
+            # Construir slots_data con la información que ya tiene
+            slots_data = {}
+            if has_gps:
+                slots_data["gps_location"] = f"{order.delivery_latitude},{order.delivery_longitude}"
+            if has_reference:
+                slots_data["delivery_reference"] = order.delivery_reference
+            if has_payment:
+                slots_data["payment_method"] = order.payment_method
+
+            context_mgr.update_module_context(
+                phone=phone,
+                module_name="CheckoutModule",
+                context_updates={
+                    "start_checkout": False,
+                    "checkout_order_id": order.id,
+                    "current_module": "CheckoutModule",
+                    "conversation_state": "collecting_slots",
+                    "slots_data": slots_data,
+                    "current_slot": current_slot,
+                    "validation_attempts": {}
+                }
+            )
+            logger.info(f"🔔 Contexto actualizado para {phone}: checkout en slot '{current_slot}', order_id={order.id}")
+        else:
+            # Ya tiene toda la información, no activar CheckoutModule
+            logger.info(f"✅ Orden {order.order_number} ya tiene toda la información (GPS, referencia, pago)")
         
         # 5. Enviar mensajes al usuario por WhatsApp (con retry logic)
         try:
@@ -418,21 +449,21 @@ async def complete_cart(
                     f"🔄 *¡Orden Actualizada!*\n\n"
                     f"He actualizado tu orden:\n\n"
                     f"{summary}\n\n"
-                    f"Los cambios se han guardado. Tu orden sigue pendiente de pago."
+                    f"Los cambios se han guardado."
                 )
-                
+
                 success1, _ = await webhook_retry_service.execute_with_retry(
                     waha.send_text_message,
                     "Notificar modificación de orden",
                     chat_id,
                     initial_message
                 )
-                
+
                 if success1:
                     logger.info(f"✅ Notificación de modificación enviada a {phone}")
                 else:
                     logger.error(f"❌ Falló notificar modificación a {phone}")
-                
+
                 # TODO: Notificar al administrador de la modificación
                 # - Enviar mensaje al admin indicando que se modificó una orden
                 # - Incluir orden_number, productos cambiados, nuevo total
@@ -440,8 +471,37 @@ async def complete_cart(
                 # Ejemplo:
                 # admin_message = f"🔄 Orden {order.order_number} fue modificada por el usuario\nNuevo total: ${order.total}"
                 # await webhook_retry_service.execute_with_retry(waha.send_text_message, ...)
-                
-                success2 = True  # No pedir GPS de nuevo en modificaciones
+
+                # Determinar qué información pedir basado en lo que falta
+                success2 = True
+                if current_slot:
+                    # Importar CheckoutModule para obtener los prompts
+                    from app.modules.checkout_module import CheckoutModule
+                    checkout_module = CheckoutModule()
+
+                    # Encontrar el slot correcto y su prompt
+                    slot_prompts = {
+                        "gps_location": checkout_module.SLOTS[0].prompt,
+                        "delivery_reference": checkout_module.SLOTS[1].prompt,
+                        "payment_method": checkout_module.SLOTS[2].prompt
+                    }
+
+                    slot_prompt = slot_prompts.get(current_slot, "")
+
+                    if slot_prompt:
+                        success2, _ = await webhook_retry_service.execute_with_retry(
+                            waha.send_text_message,
+                            f"Solicitar {current_slot}",
+                            chat_id,
+                            slot_prompt
+                        )
+
+                        if success2:
+                            logger.info(f"✅ Solicitud de '{current_slot}' enviada a {phone}")
+                        else:
+                            logger.error(f"❌ Falló solicitar '{current_slot}' a {phone}")
+                else:
+                    logger.info(f"ℹ️ Orden {order.order_number} ya tiene toda la información, no se solicita más datos")
             else:
                 # Mensaje para orden nueva (con retry)
                 initial_message = (
