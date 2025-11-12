@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from loguru import logger
+from datetime import datetime
 
 from config.database import get_db
 from app.services.cart_service import CartService
