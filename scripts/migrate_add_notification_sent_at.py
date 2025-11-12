@@ -12,6 +12,7 @@ root_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(root_dir))
 
 from loguru import logger
+from sqlalchemy import text
 from config.database import engine, SessionLocal
 
 
@@ -24,7 +25,7 @@ def migrate_add_notification_sent_at():
 
     try:
         # Verificar si la columna ya existe
-        result = db.execute("PRAGMA table_info(orders)")
+        result = db.execute(text("PRAGMA table_info(orders)"))
         columns = [row[1] for row in result.fetchall()]
 
         if "notification_sent_at" in columns:
@@ -33,13 +34,13 @@ def migrate_add_notification_sent_at():
 
         # Agregar columna
         logger.info("➕ Agregando columna notification_sent_at...")
-        db.execute("ALTER TABLE orders ADD COLUMN notification_sent_at DATETIME")
+        db.execute(text("ALTER TABLE orders ADD COLUMN notification_sent_at DATETIME"))
         db.commit()
 
         logger.info("✅ Columna notification_sent_at agregada exitosamente")
 
         # Verificar que se agregó
-        result = db.execute("PRAGMA table_info(orders)")
+        result = db.execute(text("PRAGMA table_info(orders)"))
         columns = [row[1] for row in result.fetchall()]
 
         if "notification_sent_at" in columns:
