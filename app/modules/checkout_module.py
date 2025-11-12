@@ -76,19 +76,110 @@ class CheckoutModule:
     ) -> Dict[str, Any]:
         """
         Maneja el proceso de checkout
-        
+
         Proceso:
         1. Verifica que hay una orden para checkout
-        2. Inicia slot filling (GPS + referencia + pago)
-        3. Cuando todo está completo, confirma la orden
+        2. Si hay historial de dirección, pregunta si quiere reutilizar (SI/NO)
+        3. Si dice SÍ: reutiliza GPS y referencia, pide método de pago
+        4. Si dice NO o no hay historial: inicia slot filling (GPS + referencia + pago)
+        5. Cuando todo está completo, confirma la orden
         """
         logger.info(f"🔄 [{self.name}] Procesando checkout para {phone}")
         logger.info(f"   Mensaje: {message[:50]}...")
         logger.info(f"   Contexto: current_module={context.get('current_module')}, order_id={context.get('checkout_order_id')}")
-        
+
         # El checkout ya fue iniciado por el API (envió confirmación + prompt de GPS)
         # Aquí solo procesamos las respuestas del usuario mediante slot filling
         try:
+            # ✅ NUEVO: Manejar confirmación de reutilización de dirección
+            if context.get("awaiting_delivery_reuse_confirmation"):
+                logger.info(f"🔍 [{self.name}] Procesando confirmación de reutilización de dirección")
+
+                # Detectar intención SI/NO
+                message_lower = message.lower().strip()
+                affirmative_words = ["si", "sí", "yes", "ok", "dale", "claro", "perfecto", "correcto", "exacto", "vale"]
+                negative_words = ["no", "nop", "nope", "cambiar", "nueva", "otro", "otra"]
+
+                is_affirmative = any(word in message_lower for word in affirmative_words)
+                is_negative = any(word in message_lower for word in negative_words)
+
+                if is_affirmative and not is_negative:
+                    # ✅ Usuario quiere REUTILIZAR dirección previa
+                    logger.info(f"✅ [{self.name}] Usuario confirmó reutilizar dirección previa")
+
+                    last_delivery = context.get("last_delivery_info", {})
+
+                    # Pre-llenar slots de GPS y referencia
+                    gps_location = f"{last_delivery['latitude']},{last_delivery['longitude']}"
+                    delivery_reference = last_delivery.get("reference", "")
+
+                    slots_data = {
+                        "gps_location": gps_location,
+                        "delivery_reference": delivery_reference if delivery_reference else "ninguna"
+                    }
+
+                    logger.info(f"   GPS reutilizado: {gps_location}")
+                    logger.info(f"   Referencia reutilizada: {delivery_reference}")
+
+                    # Ahora pedir solo método de pago
+                    payment_prompt = self.SLOTS[2].prompt  # Tercer slot es payment_method
+
+                    context_updates = {
+                        "awaiting_delivery_reuse_confirmation": False,
+                        "last_delivery_info": None,
+                        "slots_data": slots_data,
+                        "current_slot": "payment_method",
+                        "validation_attempts": {},
+                        "current_module": self.name,
+                        "conversation_state": "collecting_slots"
+                    }
+
+                    return {
+                        "response": payment_prompt,
+                        "context_updates": context_updates
+                    }
+
+                elif is_negative:
+                    # ❌ Usuario NO quiere reutilizar - Pedir GPS nuevo
+                    logger.info(f"❌ [{self.name}] Usuario NO quiere reutilizar, pidiendo GPS nuevo")
+
+                    gps_prompt = self.SLOTS[0].prompt  # Primer slot es GPS
+
+                    context_updates = {
+                        "awaiting_delivery_reuse_confirmation": False,
+                        "last_delivery_info": None,
+                        "slots_data": {},
+                        "current_slot": "gps_location",
+                        "validation_attempts": {},
+                        "current_module": self.name,
+                        "conversation_state": "collecting_slots"
+                    }
+
+                    return {
+                        "response": gps_prompt,
+                        "context_updates": context_updates
+                    }
+
+                else:
+                    # ❓ No está claro, preguntar de nuevo
+                    logger.warning(f"⚠️ [{self.name}] Respuesta no clara sobre reutilización")
+
+                    last_delivery = context.get("last_delivery_info", {})
+                    reference_text = last_delivery.get("reference", "Sin referencia") if last_delivery else "Sin referencia"
+
+                    retry_prompt = (
+                        f"⚠️ No entendí tu respuesta.\n\n"
+                        f"📍 *¿Quieres usar tu última dirección de entrega?*\n"
+                        f"🏠 *Referencia:* {reference_text}\n\n"
+                        f"Responde *SÍ* o *NO*"
+                    )
+
+                    return {
+                        "response": retry_prompt,
+                        "context_updates": {}  # Mantener el mismo contexto
+                    }
+
+            # ✅ Si no estamos esperando confirmación de reutilización, continuar con slot filling normal
             # ⚠️ Validación robusta: Asegurar que slots_data y validation_attempts sean SIEMPRE diccionarios
             slots_data = context.get("slots_data", {})
             logger.debug(f"🐛 [CheckoutModule] slots_data ANTES de validar: type={type(slots_data).__name__}, value={slots_data}")
