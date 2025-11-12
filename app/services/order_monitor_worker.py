@@ -65,7 +65,7 @@ class OrderMonitorWorker:
     
     async def _check_orders(self):
         """Revisa órdenes y envía notificaciones si es necesario"""
-        logger.debug("🔍 [OrderMonitorWorker] Iniciando chequeo de órdenes...")
+        logger.info("🔍 [OrderMonitorWorker] Iniciando chequeo de órdenes...")
         db = SessionLocal()
         
         try:
@@ -77,7 +77,7 @@ class OrderMonitorWorker:
             if notifications_sent > 0:
                 logger.info(f"📨 {notifications_sent} notificaciones enviadas")
             else:
-                logger.debug("🔍 [OrderMonitorWorker] No hay notificaciones pendientes")
+                logger.info("🔍 [OrderMonitorWorker] No hay notificaciones pendientes")
             
             # 2. Revisar órdenes pending con timeout (30 minutos)
             abandoned_count = await self._check_abandoned_orders(db)
@@ -108,8 +108,8 @@ class OrderMonitorWorker:
                 Order.status == "pending",
                 Order.created_at < timeout_threshold
             ).all()
-            
-            logger.debug(f"🔍 [OrderMonitorWorker] Encontradas {len(pending_orders)} órdenes pending > 30 min")
+
+            logger.info(f"🔍 [OrderMonitorWorker] Encontradas {len(pending_orders)} órdenes pending > 30 min")
             
             abandoned_count = 0
             

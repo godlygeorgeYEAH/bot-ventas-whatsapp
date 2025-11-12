@@ -37,7 +37,7 @@ class OrderNotificationService:
                 Order.notification_sent_at.is_(None)  # ✅ Solo órdenes sin notificar
             ).all()
 
-            logger.debug(f"🔍 [OrderNotification] Encontradas {len(unnotified_confirmed)} órdenes confirmadas sin notificar")
+            logger.info(f"🔍 [OrderNotification] Encontradas {len(unnotified_confirmed)} órdenes confirmadas sin notificar")
 
             notifications_sent = 0
 
