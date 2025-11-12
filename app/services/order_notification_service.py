@@ -22,63 +22,58 @@ class OrderNotificationService:
         """
         Revisa órdenes que pasaron de pending a confirmed
         y notifica a los clientes
-        
+
+        Busca órdenes confirmadas que aún no han sido notificadas
+        (notification_sent_at IS NULL) sin importar cuándo fueron confirmadas.
+
         Returns:
             Número de notificaciones enviadas
         """
         try:
-            # Buscar órdenes confirmadas recientemente (últimas 24 horas)
-            # que no han sido notificadas
-            recent_confirmed = self.db.query(Order).filter(
+            # Buscar órdenes confirmadas que NO han sido notificadas
+            unnotified_confirmed = self.db.query(Order).filter(
                 Order.status == "confirmed",
                 Order.confirmed_at.isnot(None),
-                # Solo órdenes confirmadas en las últimas 24 horas
-                Order.confirmed_at >= datetime.utcnow() - timedelta(hours=24)
+                Order.notification_sent_at.is_(None)  # ✅ Solo órdenes sin notificar
             ).all()
-            
-            logger.debug(f"🔍 [OrderNotification] Encontradas {len(recent_confirmed)} órdenes confirmadas en últimas 24h")
-            
+
+            logger.debug(f"🔍 [OrderNotification] Encontradas {len(unnotified_confirmed)} órdenes confirmadas sin notificar")
+
             notifications_sent = 0
-            
-            for order in recent_confirmed:
-                logger.debug(f"🔍 [OrderNotification] Revisando orden {order.order_number}, confirmed_at={order.confirmed_at}")
-                # Verificar si ya fue notificada
-                # (podríamos agregar un campo order.notification_sent)
-                # Por ahora, verificamos si confirmed_at es muy reciente (últimos 5 minutos)
+
+            for order in unnotified_confirmed:
                 time_since_confirmed = datetime.utcnow() - order.confirmed_at
-                
-                logger.debug(f"   ⏱️ Tiempo desde confirmación: {time_since_confirmed.total_seconds():.0f} segundos")
-                
-                # Solo notificar órdenes confirmadas en los últimos 30 minutos
-                # TODO: Implementar campo notification_sent en Order para evitar duplicados
-                if time_since_confirmed > timedelta(minutes=30):
-                    logger.debug(f"   ⏭️ Orden {order.order_number} muy antigua para notificar (>{time_since_confirmed.total_seconds():.0f}s)")
-                    continue
-                
-                logger.debug(f"   ✅ Orden {order.order_number} dentro de ventana de notificación")
-                
+                logger.info(f"🔍 [OrderNotification] Procesando orden {order.order_number}")
+                logger.info(f"   ⏱️ Confirmada hace: {time_since_confirmed.total_seconds():.0f} segundos")
+
                 # Obtener customer
                 customer = self.db.query(Customer).filter(
                     Customer.id == order.customer_id
                 ).first()
-                
+
                 if not customer or not customer.phone:
                     logger.warning(f"⚠️ Customer no encontrado para orden {order.order_number}")
                     continue
-                
-                logger.debug(f"   📞 Enviando notificación a {customer.phone}...")
-                
+
+                logger.info(f"   📞 Enviando notificación a {customer.phone}...")
+
                 # Enviar notificación
                 success = await self._send_confirmation_notification(order, customer)
-                
+
                 if success:
+                    # ✅ Marcar como notificada
+                    order.notification_sent_at = datetime.utcnow()
+                    self.db.commit()
+                    self.db.refresh(order)
+
                     notifications_sent += 1
                     logger.info(f"✅ Notificación enviada para orden {order.order_number} a {customer.phone}")
+                    logger.info(f"   📝 Marcada como notificada en {order.notification_sent_at}")
                 else:
                     logger.warning(f"⚠️ Falló enviar notificación para orden {order.order_number}")
-            
+
             return notifications_sent
-            
+
         except Exception as e:
             logger.error(f"❌ Error en check_and_notify_confirmed_orders: {e}")
             return 0

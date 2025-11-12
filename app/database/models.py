@@ -226,6 +226,7 @@ class Order(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     confirmed_at = Column(DateTime)
+    notification_sent_at = Column(DateTime)  # Timestamp de cuando se notificó la confirmación al usuario
     shipped_at = Column(DateTime)
     delivered_at = Column(DateTime)
     cancelled_at = Column(DateTime)
