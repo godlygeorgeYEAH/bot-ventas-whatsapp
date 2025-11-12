@@ -724,3 +724,52 @@ class OrderService:
         except Exception as e:
             logger.error(f"❌ Error obteniendo productos no en orden: {e}")
             return []
+
+    def get_last_delivery_info(self, customer_id: str) -> Optional[Dict]:
+        """
+        Obtiene la información de entrega de la última orden completada del cliente
+
+        Busca la orden más reciente (confirmada o entregada) que tenga
+        latitud, longitud y referencia guardadas.
+
+        Args:
+            customer_id: ID del cliente
+
+        Returns:
+            Dict con {latitude, longitude, reference} o None si no hay historial
+        """
+        try:
+            # Buscar la orden más reciente con GPS válido
+            # Estados válidos: confirmed, delivered, shipped
+            valid_statuses = [
+                OrderStatus.CONFIRMED.value,
+                OrderStatus.DELIVERED.value,
+                OrderStatus.SHIPPED.value
+            ]
+
+            order = self.db.query(Order).filter(
+                Order.customer_id == customer_id,
+                Order.status.in_(valid_statuses),
+                Order.delivery_latitude.isnot(None),
+                Order.delivery_longitude.isnot(None)
+            ).order_by(Order.created_at.desc()).first()
+
+            if not order:
+                logger.info(f"❌ No se encontró historial de entrega para cliente {customer_id}")
+                return None
+
+            result = {
+                "latitude": order.delivery_latitude,
+                "longitude": order.delivery_longitude,
+                "reference": order.delivery_reference or ""
+            }
+
+            logger.info(f"✅ Historial de entrega encontrado para cliente {customer_id}")
+            logger.info(f"   GPS: {result['latitude']}, {result['longitude']}")
+            logger.info(f"   Referencia: {result['reference']}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"❌ Error obteniendo historial de entrega: {e}")
+            return None

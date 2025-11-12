@@ -462,23 +462,86 @@ async def complete_cart(
                 else:
                     logger.error(f"❌ Falló enviar mensaje inicial a {phone}")
                 
-                # Mensaje 2: Pedir GPS (primer slot del checkout) (con retry)
-                from app.modules.checkout_module import CheckoutModule
-                checkout_module = CheckoutModule()
-                gps_prompt = checkout_module.SLOTS[0].prompt  # Primer slot es GPS
-                
-                success2, _ = await webhook_retry_service.execute_with_retry(
-                    waha.send_text_message,
-                    "Enviar prompt GPS",
-                    chat_id,
-                    gps_prompt
-                )
-                
-                if success2:
-                    logger.info(f"✅ Prompt de GPS enviado a {phone}")
+                # Mensaje 2: Verificar si hay historial de entrega
+                # Si existe, ofrecer reutilizar. Si no, pedir GPS normalmente
+                last_delivery = order_service.get_last_delivery_info(customer_id)
+
+                if last_delivery:
+                    # ✅ Tiene historial - Ofrecer reutilizar
+                    logger.info(f"📍 Cliente tiene historial de entrega, ofreciendo reutilizar")
+
+                    # Primero enviar la ubicación GPS
+                    try:
+                        success_location, _ = await webhook_retry_service.execute_with_retry(
+                            waha.send_location,
+                            "Enviar ubicación GPS previa",
+                            chat_id,
+                            last_delivery["latitude"],
+                            last_delivery["longitude"],
+                            "Tu última ubicación de entrega"
+                        )
+
+                        if success_location:
+                            logger.info(f"✅ Ubicación GPS previa enviada a {phone}")
+                        else:
+                            logger.error(f"❌ Falló enviar ubicación GPS previa a {phone}")
+                    except Exception as e:
+                        logger.error(f"❌ Error enviando ubicación GPS previa: {e}")
+                        success_location = False
+
+                    # Luego enviar mensaje preguntando si quiere reutilizar
+                    reference_text = last_delivery["reference"] if last_delivery["reference"] else "Sin referencia"
+                    reuse_prompt = (
+                        f"📍 *Esta es tu última dirección de entrega registrada.*\n\n"
+                        f"🏠 *Referencia anterior:* {reference_text}\n\n"
+                        f"¿Quieres usar esta misma dirección y referencia para esta orden?\n\n"
+                        f"Responde *SÍ* para reutilizar, o *NO* para ingresar una nueva dirección."
+                    )
+
+                    success2, _ = await webhook_retry_service.execute_with_retry(
+                        waha.send_text_message,
+                        "Preguntar reutilización de dirección",
+                        chat_id,
+                        reuse_prompt
+                    )
+
+                    if success2:
+                        logger.info(f"✅ Prompt de reutilización enviado a {phone}")
+                    else:
+                        logger.error(f"❌ Falló enviar prompt de reutilización a {phone}")
+
+                    # Actualizar contexto con flag de reutilización y datos previos
+                    context_mgr.update_module_context(
+                        phone=phone,
+                        module_name="CheckoutModule",
+                        context_updates={
+                            "awaiting_delivery_reuse_confirmation": True,
+                            "last_delivery_info": last_delivery,
+                            "current_slot": None  # No estamos en un slot específico aún
+                        }
+                    )
+                    logger.info(f"   Contexto actualizado: esperando confirmación de reutilización")
+
                 else:
-                    logger.error(f"❌ Falló enviar prompt GPS a {phone}")
-                logger.info(f"   current_slot ya fue seteado a '{checkout_module.SLOTS[0].name}' en el contexto inicial")
+                    # ❌ No tiene historial - Pedir GPS normalmente
+                    logger.info(f"📍 Cliente NO tiene historial de entrega, pidiendo GPS")
+
+                    from app.modules.checkout_module import CheckoutModule
+                    checkout_module = CheckoutModule()
+                    gps_prompt = checkout_module.SLOTS[0].prompt  # Primer slot es GPS
+
+                    success2, _ = await webhook_retry_service.execute_with_retry(
+                        waha.send_text_message,
+                        "Enviar prompt GPS",
+                        chat_id,
+                        gps_prompt
+                    )
+
+                    if success2:
+                        logger.info(f"✅ Prompt de GPS enviado a {phone}")
+                    else:
+                        logger.error(f"❌ Falló enviar prompt GPS a {phone}")
+                    logger.info(f"   current_slot ya fue seteado a '{checkout_module.SLOTS[0].name}' en el contexto inicial")
             
             # ⚠️ FALLBACK: Si ambos mensajes fallaron después de todos los reintentos
             if not success1 and not success2:
