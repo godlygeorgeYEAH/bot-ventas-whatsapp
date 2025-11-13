@@ -295,6 +295,48 @@ class SyncMessageWorker:
     def _detect_intent_with_ollama(self, message: str) -> dict:
         """Detecta la intención usando Ollama (llamada síncrona al proxy)"""
         try:
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            # 🚨 REGEX FALLBACK: Detectar casos críticos ANTES del LLM
+            # El regex es rápido y confiable para patrones obvios
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            import re
+            message_lower = message.lower()
+
+            # CASO 1: cancel_order (MÁXIMA PRIORIDAD)
+            # Detectar cuando usuario quiere cancelar TODA la orden (no solo un producto)
+            cancel_keywords = r'(cancel|anul|ya\s+no\s+quier|no\s+quier|mejor\s+no|desist)'
+            order_keywords = r'(orden|ordenar|ordeno|pedido|pedir|pido|compra|comprar|compro)'
+
+            # Detectar si menciona cancelar/anular la orden completa
+            if re.search(cancel_keywords, message_lower) and re.search(order_keywords, message_lower):
+                # Verificar que NO mencione productos específicos (esto sería remove_from_order)
+                product_indicators = r'(el |la |los |las |este |ese |producto|item|artículo)'
+
+                # Si NO menciona productos específicos, es cancel_order
+                if not re.search(product_indicators + r'.{0,20}' + cancel_keywords, message_lower):
+                    logger.info(f"🎯 [Worker] ✅ REGEX MATCH: cancel_order (bypassing LLM)")
+                    return {
+                        "intent": "cancel_order",
+                        "confidence": 1.0,
+                        "detection_method": "regex_fallback"
+                    }
+
+            # CASO 2: remove_from_order
+            remove_keywords = r'(elimin|quit|remov|borr|sac|cancel)'
+            order_keywords = r'(orden|pedido|compra)'
+
+            if re.search(remove_keywords, message_lower) and re.search(order_keywords, message_lower):
+                logger.info(f"🎯 [Worker] ✅ REGEX MATCH: remove_from_order (bypassing LLM)")
+                return {
+                    "intent": "remove_from_order",
+                    "confidence": 1.0,
+                    "detection_method": "regex_fallback"
+                }
+
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            # Continuar con detección LLM si no hay match de regex
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
             prompt = f"""Eres un clasificador de intenciones para un bot de ventas por WhatsApp.
 
 INTENCIONES DISPONIBLES:
