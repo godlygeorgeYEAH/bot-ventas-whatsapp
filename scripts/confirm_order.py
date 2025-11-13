@@ -76,7 +76,7 @@ def show_order_details(order: Order):
     print(f"\nProductos:")
     print("-" * 80)
     for item in order.items:
-        print(f"  • {item.product_name} x{item.quantity} - ${item.price:.2f} c/u = ${item.subtotal:.2f}")
+        print(f"  • {item.product_name} x{item.quantity} - ${item.unit_price:.2f} c/u = ${item.subtotal:.2f}")
     print("-" * 80)
     print(f"Total: ${order.total:.2f}")
     print("="*80)
