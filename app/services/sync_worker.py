@@ -295,89 +295,35 @@ class SyncMessageWorker:
     def _detect_intent_with_ollama(self, message: str) -> dict:
         """Detecta la intención usando Ollama (llamada síncrona al proxy)"""
         try:
-            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            # 🚨 REGEX FALLBACK: Detectar casos críticos ANTES del LLM
-            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            import re
-            message_lower = message.lower()
+            prompt = f"""Eres un clasificador de intenciones para un bot de ventas por WhatsApp.
 
-            # CASO 1: cancel_order (MÁXIMA PRIORIDAD)
-            # Detectar cuando usuario quiere cancelar TODA la orden (no solo un producto)
-            # Palabras clave: cancelar, anular, ya no quiero + orden/pedido
-            # IMPORTANTE: Sin mencionar productos específicos
-            cancel_keywords = r'(cancel|anul|ya\s+no\s+quier|no\s+quier|mejor\s+no|desist)'
-            order_keywords = r'(orden|ordenar|ordeno|pedido|pedir|pido|compra|comprar|compro)'
+INTENCIONES DISPONIBLES:
+1. greeting - Saludos: "hola", "buenos días", "hey"
+2. goodbye - Despedidas: "adiós", "chao", "hasta luego"
+3. create_order - Quiere comprar: "quiero comprar", "dame precio"
+4. check_order - Consultar pedido: "¿dónde está mi pedido?", "estado de mi orden"
+5. cancel_order - Cancelar TODA la orden: "cancela mi orden", "ya no quiero ordenar", "no quiero mi pedido", "anula la compra"
+6. remove_from_order - Quitar un PRODUCTO específico: "elimina el mouse de mi orden", "saca la laptop"
+7. other - Cualquier otra cosa
 
-            # Detectar si menciona cancelar/anular la orden completa
-            if re.search(cancel_keywords, message_lower) and re.search(order_keywords, message_lower):
-                # Verificar que NO mencione productos específicos (esto sería remove_from_order)
-                # Lista de palabras que indican productos específicos
-                product_indicators = r'(el |la |los |las |este |ese |producto|item|artículo)'
+REGLAS IMPORTANTES:
+- cancel_order: Usuario quiere cancelar TODA su orden (NO menciona productos específicos)
+- remove_from_order: Usuario quiere quitar UN PRODUCTO específico de su orden (menciona "el", "la", nombre de producto)
 
-                # Si NO menciona productos específicos, es cancel_order
-                if not re.search(product_indicators + r'.{0,20}' + cancel_keywords, message_lower):
-                    logger.info(f"🎯 [Worker] ✅ REGEX MATCH: cancel_order (bypassing LLM)")
-                    return {
-                        "intent": "cancel_order",
-                        "confidence": 1.0,
-                        "detection_method": "regex_fallback"
-                    }
+MENSAJE DEL USUARIO:
+"{message}"
 
-            # CASO 2: remove_from_order
-            # Usar patrones que capturen todas las conjugaciones de los verbos
-            remove_keywords = r'(elimin|quit|remov|borr|sac|cancel)'
-            order_keywords = r'(orden|pedido|compra)'
+RESPUESTA (una palabra en minúsculas): """
 
-            if re.search(remove_keywords, message_lower) and re.search(order_keywords, message_lower):
-                logger.info(f"🎯 [Worker] ✅ REGEX MATCH: remove_from_order (bypassing LLM)")
-                return {
-                    "intent": "remove_from_order",
-                    "confidence": 1.0,
-                    "detection_method": "regex_fallback"
-                }
-            
-            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            # Continuar con detección LLM si no hay match de regex
-            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-            
-            prompt = f"""Eres un asistente de ventas por WhatsApp. Tu tarea es identificar la intención del usuario.
+            logger.debug(f"🔵 [Worker] Enviando prompt al LLM para detección de intención")
 
-    INTENCIONES DISPONIBLES:
-    - greeting: Saludos (hola, buenos días, hey, etc)
-    - goodbye: Despedidas (adiós, chao, hasta luego, etc)
-    - create_order: Quiere hacer un pedido o comprar algo
-    - check_order: Quiere consultar el estado de un pedido
-    - cancel_order: Quiere cancelar/anular su orden completa
-    - remove_from_order: Quiere eliminar/quitar/sacar/remover/borrar productos específicos de su orden existente
-    - other: Cualquier otra cosa
-
-    EJEMPLOS DE cancel_order:
-    - "cancela mi orden"
-    - "quiero cancelar el pedido"
-    - "anula mi compra"
-    - "ya no quiero la orden"
-
-    EJEMPLOS DE remove_from_order:
-    - "elimina el mouse de mi orden"
-    - "quiero quitar la laptop"
-    - "saca el teclado de la orden"
-    - "remover los audífonos del pedido"
-    - "borrar producto de mi compra"
-
-    MENSAJE DEL USUARIO: "{message}"
-
-    Responde SOLO con el nombre de la intención en minúsculas (greeting, goodbye, create_order, check_order, cancel_order, remove_from_order, o other).
-    No agregues explicaciones, solo la intención."""
-
-            logger.debug(f"🔵 [Worker] Prompt para detección (LLM): {prompt[:200]}...")
-            
             response = requests.post(
                 'http://localhost:5001/generate',
                 json={
                     "model": "llama3.2:latest",
                     "prompt": prompt,
-                    "temperature": 0.3,
-                    "max_tokens": 50
+                    "temperature": 0.1,  # Más determinístico
+                    "max_tokens": 20     # Solo necesitamos una palabra
                 },
                 timeout=30.0
             )
@@ -387,19 +333,34 @@ class SyncMessageWorker:
             
             if result.get("success"):
                 intent_text = result["response"].strip().lower()
-                
+
+                # Limpiar respuesta (remover puntuación, espacios extras, etc)
+                import string
+                intent_text = intent_text.translate(str.maketrans('', '', string.punctuation)).strip()
+
                 valid_intents = ["greeting", "goodbye", "create_order", "check_order", "cancel_order", "remove_from_order", "other"]
-                
+
+                # Primero buscar match exacto
+                if intent_text in valid_intents:
+                    logger.info(f"✅ [Worker] LLM detectó intención: {intent_text}")
+                    return {
+                        "intent": intent_text,
+                        "confidence": 0.95,
+                        "detection_method": "llm"
+                    }
+
+                # Si no hay match exacto, buscar substring
                 for valid_intent in valid_intents:
-                    if valid_intent in intent_text:
-                        logger.info(f"✅ [Worker] Ollama respondió: '{intent_text}' → Intención: {valid_intent} (LLM)")
+                    if valid_intent in intent_text or intent_text in valid_intent:
+                        logger.info(f"✅ [Worker] LLM respondió: '{intent_text}' → Match parcial: {valid_intent}")
                         return {
                             "intent": valid_intent,
-                            "confidence": 0.9,
+                            "confidence": 0.85,
                             "detection_method": "llm"
                         }
-                
-                logger.warning(f"⚠️ [Worker] Respuesta de Ollama no válida: '{intent_text}', usando 'other'")
+
+                # Si no hay match, usar 'other'
+                logger.warning(f"⚠️ [Worker] LLM respondió valor inesperado: '{intent_text}', usando 'other'")
                 return {
                     "intent": "other",
                     "confidence": 0.5,
