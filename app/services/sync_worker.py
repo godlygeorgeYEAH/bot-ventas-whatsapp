@@ -337,25 +337,25 @@ class SyncMessageWorker:
             # Continuar con detección LLM si no hay match de regex
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-            prompt = f"""Eres un clasificador de intenciones para un bot de ventas por WhatsApp.
+            prompt = f"""Clasifica el mensaje en UNA de estas categorías. Responde SOLO con la palabra, sin explicaciones.
 
-INTENCIONES DISPONIBLES:
-1. greeting - Saludos: "hola", "buenos días", "hey"
-2. goodbye - Despedidas: "adiós", "chao", "hasta luego"
-3. create_order - Quiere comprar: "quiero comprar", "dame precio"
-4. check_order - Consultar pedido: "¿dónde está mi pedido?", "estado de mi orden"
-5. cancel_order - Cancelar TODA la orden: "cancela mi orden", "ya no quiero ordenar", "no quiero mi pedido", "anula la compra"
-6. remove_from_order - Quitar un PRODUCTO específico: "elimina el mouse de mi orden", "saca la laptop"
-7. other - Cualquier otra cosa
+CATEGORÍAS:
+- greeting (saludos)
+- goodbye (despedidas)
+- create_order (quiere comprar)
+- check_order (consultar pedido)
+- cancel_order (cancelar orden completa)
+- remove_from_order (quitar producto)
+- other (otro)
 
-REGLAS IMPORTANTES:
-- cancel_order: Usuario quiere cancelar TODA su orden (NO menciona productos específicos)
-- remove_from_order: Usuario quiere quitar UN PRODUCTO específico de su orden (menciona "el", "la", nombre de producto)
+EJEMPLOS:
+Usuario: "hola" → greeting
+Usuario: "quiero comprar" → create_order
+Usuario: "cancela mi orden" → cancel_order
+Usuario: "elimina el mouse" → remove_from_order
 
-MENSAJE DEL USUARIO:
-"{message}"
-
-RESPUESTA (una palabra en minúsculas): """
+Usuario: "{message}"
+Categoría:"""
 
             logger.debug(f"🔵 [Worker] Enviando prompt al LLM para detección de intención")
 
@@ -364,8 +364,9 @@ RESPUESTA (una palabra en minúsculas): """
                 json={
                     "model": "llama3.2:latest",
                     "prompt": prompt,
-                    "temperature": 0.1,  # Más determinístico
-                    "max_tokens": 20     # Solo necesitamos una palabra
+                    "temperature": 0.0,  # Completamente determinístico
+                    "max_tokens": 5,     # Máximo 5 tokens para una palabra
+                    "stop": ["\n", ".", ",", " -"]  # Detener en nueva línea o puntuación
                 },
                 timeout=30.0
             )
@@ -376,8 +377,11 @@ RESPUESTA (una palabra en minúsculas): """
             if result.get("success"):
                 intent_text = result["response"].strip().lower()
 
-                # Limpiar respuesta (remover puntuación, espacios extras, etc)
+                # Tomar solo la primera palabra (en caso de que el LLM genere más texto)
                 import string
+                intent_text = intent_text.split()[0] if intent_text.split() else intent_text
+
+                # Limpiar respuesta (remover puntuación, espacios extras, etc)
                 intent_text = intent_text.translate(str.maketrans('', '', string.punctuation)).strip()
 
                 valid_intents = ["greeting", "goodbye", "create_order", "check_order", "cancel_order", "remove_from_order", "other"]
