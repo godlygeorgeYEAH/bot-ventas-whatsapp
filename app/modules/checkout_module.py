@@ -35,7 +35,7 @@ class CheckoutModule:
             prompt="🏠 *¿Hay alguna referencia que me ayude a encontrar tu dirección?*\n\n"
                    "Por ejemplo: 'Casa azul con portón blanco', 'Edificio Torre Norte, apto 501', etc.\n\n"
                    "_(O escribe 'ninguna' si no hay referencia)_",
-            required=False,
+            required=True,  # ⚠️ OBLIGATORIO: Siempre preguntar referencia después de GPS
             auto_extract=True,
             examples=["Casa azul con portón blanco", "Edificio Torre Norte, apto 501", "ninguna"]
         ),
