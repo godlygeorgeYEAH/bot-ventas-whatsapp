@@ -99,20 +99,64 @@ class SyncMessageWorker:
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             from app.core.module_registry import get_module_registry
             registry = get_module_registry()
-            
+
             # CASO ESPECIAL 1: Si waiting_offer_response=True, forzar OfferProductModule
             if module_context.get('waiting_offer_response') and not module_context.get('current_module'):
                 logger.info(f"🎁 [Worker] Detectado waiting_offer_response=True sin current_module, forzando OfferProductModule")
                 module_context['current_module'] = 'OfferProductModule'
-            
+
             # CASO ESPECIAL 2: Si current_module=CheckoutModule Y conversation_state=collecting_slots, mantener CheckoutModule
             # (solo si está EN PROCESO, no si es el inicio)
-            if (module_context.get('current_module') == 'CheckoutModule' and 
+            if (module_context.get('current_module') == 'CheckoutModule' and
                 module_context.get('conversation_state') == 'collecting_slots'):
                 logger.info(f"🛒 [Worker] CheckoutModule en proceso de slot filling, manteniéndolo activo")
-            
+
             active_module = registry.get_module_by_context(module_context)
-            
+
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            # ⚡ PRIORIDAD: Detectar intents de ALTA PRIORIDAD incluso con módulo activo
+            # Algunos intents deben interrumpir el flujo actual (ej: cancel_order)
+            # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+            high_priority_intent = None
+            if active_module:
+                # Detectar intención para verificar si es de alta prioridad
+                intent_result = self._detect_intent_with_ollama(message)
+                detected_intent = intent_result.get("intent", "other")
+
+                # Lista de intents que deben interrumpir cualquier flujo activo
+                high_priority_intents = ["cancel_order"]
+
+                if detected_intent in high_priority_intents:
+                    logger.info(f"🚨 [Worker] Intent de ALTA PRIORIDAD detectado: {detected_intent} - Interrumpiendo módulo actual")
+                    high_priority_intent = detected_intent
+
+                    # Buscar módulo para este intent
+                    target_module = registry.find_module_for_intent(detected_intent, module_context)
+
+                    if target_module:
+                        logger.info(f"🎯 [Worker] Módulo de alta prioridad encontrado: {target_module.name}")
+
+                        # Usar módulo de alta prioridad (reemplaza active_module)
+                        result = target_module.handle(
+                            message=message,
+                            context=module_context,
+                            phone=phone
+                        )
+
+                        # Actualizar contexto
+                        with get_db_context() as db:
+                            context_manager = ContextManager(db)
+                            context_manager.update_module_context(
+                                phone=phone,
+                                module_name=target_module.name,
+                                context_updates=result.get('context_updates', {})
+                            )
+
+                        response = result.get('response', '')
+
+                        # Saltar el procesamiento normal del módulo activo
+                        active_module = None
+
             if active_module:
                 logger.info(f"🎯 [Worker] Módulo activo detectado: {active_module.name}")
                 
