@@ -303,16 +303,16 @@ class SyncMessageWorker:
 
             # CASO 1: cancel_order (MÁXIMA PRIORIDAD)
             # Detectar cuando usuario quiere cancelar TODA la orden (no solo un producto)
-            # Palabras clave: cancelar, anular + orden/pedido
+            # Palabras clave: cancelar, anular, ya no quiero + orden/pedido
             # IMPORTANTE: Sin mencionar productos específicos
-            cancel_keywords = r'(cancel|anul)'
-            order_keywords = r'(orden|pedido|compra)'
+            cancel_keywords = r'(cancel|anul|ya\s+no\s+quier|no\s+quier|mejor\s+no|desist)'
+            order_keywords = r'(orden|ordenar|ordeno|pedido|pedir|pido|compra|comprar|compro)'
 
             # Detectar si menciona cancelar/anular la orden completa
             if re.search(cancel_keywords, message_lower) and re.search(order_keywords, message_lower):
                 # Verificar que NO mencione productos específicos (esto sería remove_from_order)
                 # Lista de palabras que indican productos específicos
-                product_indicators = r'(el |la |los |las |mi |este |ese |producto|item|artículo)'
+                product_indicators = r'(el |la |los |las |este |ese |producto|item|artículo)'
 
                 # Si NO menciona productos específicos, es cancel_order
                 if not re.search(product_indicators + r'.{0,20}' + cancel_keywords, message_lower):
