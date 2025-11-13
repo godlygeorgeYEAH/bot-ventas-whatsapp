@@ -381,8 +381,10 @@ Categoría:"""
                 import string
                 intent_text = intent_text.split()[0] if intent_text.split() else intent_text
 
-                # Limpiar respuesta (remover puntuación, espacios extras, etc)
-                intent_text = intent_text.translate(str.maketrans('', '', string.punctuation)).strip()
+                # Limpiar respuesta (remover puntuación EXCEPTO guiones bajos)
+                # Crear lista de puntuación sin el guion bajo
+                punctuation_without_underscore = string.punctuation.replace('_', '')
+                intent_text = intent_text.translate(str.maketrans('', '', punctuation_without_underscore)).strip()
 
                 valid_intents = ["greeting", "goodbye", "create_order", "check_order", "cancel_order", "remove_from_order", "other"]
 
@@ -395,7 +397,19 @@ Categoría:"""
                         "detection_method": "llm"
                     }
 
-                # Si no hay match exacto, buscar substring
+                # Si no hay match exacto, buscar normalizando guiones bajos (createorder vs create_order)
+                intent_normalized = intent_text.replace('_', '')
+                for valid_intent in valid_intents:
+                    valid_normalized = valid_intent.replace('_', '')
+                    if intent_normalized == valid_normalized:
+                        logger.info(f"✅ [Worker] LLM respondió: '{intent_text}' → Match normalizado: {valid_intent}")
+                        return {
+                            "intent": valid_intent,
+                            "confidence": 0.95,
+                            "detection_method": "llm"
+                        }
+
+                # Si no hay match, buscar substring
                 for valid_intent in valid_intents:
                     if valid_intent in intent_text or intent_text in valid_intent:
                         logger.info(f"✅ [Worker] LLM respondió: '{intent_text}' → Match parcial: {valid_intent}")
