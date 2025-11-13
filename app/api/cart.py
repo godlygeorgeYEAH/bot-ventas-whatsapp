@@ -420,19 +420,19 @@ async def complete_cart(
                     f"{summary}\n\n"
                     f"Los cambios se han guardado. Tu orden sigue pendiente de pago."
                 )
-                
+
                 success1, _ = await webhook_retry_service.execute_with_retry(
                     waha.send_text_message,
                     "Notificar modificación de orden",
                     chat_id,
                     initial_message
                 )
-                
+
                 if success1:
                     logger.info(f"✅ Notificación de modificación enviada a {phone}")
                 else:
                     logger.error(f"❌ Falló notificar modificación a {phone}")
-                
+
                 # TODO: Notificar al administrador de la modificación
                 # - Enviar mensaje al admin indicando que se modificó una orden
                 # - Incluir orden_number, productos cambiados, nuevo total
@@ -440,8 +440,93 @@ async def complete_cart(
                 # Ejemplo:
                 # admin_message = f"🔄 Orden {order.order_number} fue modificada por el usuario\nNuevo total: ${order.total}"
                 # await webhook_retry_service.execute_with_retry(waha.send_text_message, ...)
-                
-                success2 = True  # No pedir GPS de nuevo en modificaciones
+
+                # ⚡ VERIFICAR SI ORDEN TIENE GPS Y REFERENCIA
+                has_gps = order.delivery_latitude and order.delivery_longitude
+                has_reference = order.delivery_reference
+
+                if has_gps and has_reference:
+                    # Orden ya tiene todos los datos de ubicación
+                    logger.info(f"✅ Orden modificada ya tiene GPS y referencia completos")
+                    success2 = True
+                else:
+                    # Orden modificada NO tiene GPS o referencia, pedirlos
+                    logger.info(f"⚠️ Orden modificada falta datos de ubicación (GPS: {has_gps}, Ref: {has_reference})")
+
+                    from app.modules.checkout_module import CheckoutModule
+                    checkout_module = CheckoutModule()
+
+                    # Verificar si hay ubicación previa del cliente
+                    last_location = order_service.get_customer_last_location(customer.id)
+
+                    if last_location:
+                        # Usuario tiene ubicación previa, ofrecerla
+                        latitude, longitude, reference = last_location
+                        logger.info(f"📍 Ofreciendo ubicación previa al usuario: {latitude}, {longitude}")
+
+                        # 1. Enviar la ubicación por WhatsApp
+                        success_loc, _ = await webhook_retry_service.execute_with_retry(
+                            waha.send_location,
+                            "Enviar ubicación previa (modificación)",
+                            chat_id,
+                            latitude,
+                            longitude,
+                            "Última ubicación usada"
+                        )
+
+                        if success_loc:
+                            logger.info(f"✅ Ubicación previa enviada a {phone}")
+
+                        # 2. Enviar mensaje preguntando si quiere usar esa ubicación Y referencia
+                        location_prompt = "📍 Te envié tu última ubicación de entrega."
+                        if reference:
+                            location_prompt += f"\n📝 Referencia: *{reference}*"
+                            location_prompt += "\n\n¿Deseas usar la misma *ubicación y referencia* para esta entrega?\n\n"
+                        else:
+                            location_prompt += "\n\n¿Deseas usar la misma ubicación para esta entrega?\n\n"
+                        location_prompt += "Responde *SÍ* para confirmar o *NO* para enviar una nueva ubicación."
+
+                        success2, _ = await webhook_retry_service.execute_with_retry(
+                            waha.send_text_message,
+                            "Preguntar confirmación ubicación (modificación)",
+                            chat_id,
+                            location_prompt
+                        )
+
+                        if success2:
+                            logger.info(f"✅ Pregunta de confirmación enviada a {phone}")
+                        else:
+                            logger.error(f"❌ Falló enviar pregunta de confirmación a {phone}")
+
+                        # Actualizar contexto para indicar que estamos esperando confirmación
+                        context_mgr.update_module_context(
+                            phone=phone,
+                            module_name="CheckoutModule",
+                            context_updates={
+                                "waiting_location_confirmation": True,
+                                "previous_location_offered": True,
+                                "offered_location": f"{latitude},{longitude}",
+                                "offered_reference": reference
+                            }
+                        )
+                        logger.info(f"🔔 Contexto actualizado: esperando confirmación de ubicación")
+
+                    else:
+                        # Usuario NO tiene ubicación previa, pedir GPS normalmente
+                        logger.info(f"📍 Usuario NO tiene ubicación previa, pidiendo GPS")
+                        gps_prompt = checkout_module.SLOTS[0].prompt  # Primer slot es GPS
+
+                        success2, _ = await webhook_retry_service.execute_with_retry(
+                            waha.send_text_message,
+                            "Enviar prompt GPS (modificación)",
+                            chat_id,
+                            gps_prompt
+                        )
+
+                        if success2:
+                            logger.info(f"✅ Prompt de GPS enviado a {phone}")
+                        else:
+                            logger.error(f"❌ Falló enviar prompt GPS a {phone}")
             else:
                 # Mensaje para orden nueva (con retry)
                 initial_message = (
