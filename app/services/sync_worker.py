@@ -337,25 +337,27 @@ class SyncMessageWorker:
             # Continuar con detección LLM si no hay match de regex
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-            prompt = f"""Clasifica el mensaje en UNA de estas categorías. Responde SOLO con la palabra, sin explicaciones.
+            prompt = f"""Responde SOLO con UNA de estas palabras exactas (en inglés):
+greeting
+goodbye
+create_order
+check_order
+cancel_order
+remove_from_order
+other
 
-CATEGORÍAS:
-- greeting (saludos)
-- goodbye (despedidas)
-- create_order (quiere comprar)
-- check_order (consultar pedido)
-- cancel_order (cancelar orden completa)
-- remove_from_order (quitar producto)
-- other (otro)
+Ejemplos:
+"hola" → greeting
+"adiós" → goodbye
+"quiero comprar" → create_order
+"quiero ordenar" → create_order
+"necesito algo" → create_order
+"ver mi pedido" → check_order
+"cancela mi orden" → cancel_order
+"elimina el mouse" → remove_from_order
+"cómo estás" → other
 
-EJEMPLOS:
-Usuario: "hola" → greeting
-Usuario: "quiero comprar" → create_order
-Usuario: "cancela mi orden" → cancel_order
-Usuario: "elimina el mouse" → remove_from_order
-
-Usuario: "{message}"
-Categoría:"""
+"{message}" →"""
 
             logger.debug(f"🔵 [Worker] Enviando prompt al LLM para detección de intención")
 
