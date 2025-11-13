@@ -101,7 +101,7 @@ class CancelOrderModule:
                     }
 
                 # Buscar orden pendiente o confirmada (las únicas que se pueden cancelar)
-                orders = order_service.get_orders_by_customer(customer.id)
+                orders = order_service.get_customer_orders(customer.id)
 
                 # Filtrar órdenes que pueden cancelarse
                 cancellable_orders = [
