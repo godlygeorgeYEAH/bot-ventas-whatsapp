@@ -256,12 +256,34 @@ class SyncMessageWorker:
             # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
             import re
             message_lower = message.lower()
-            
-            # CASO 1: remove_from_order (MÁXIMA PRIORIDAD)
+
+            # CASO 1: cancel_order (MÁXIMA PRIORIDAD)
+            # Detectar cuando usuario quiere cancelar TODA la orden (no solo un producto)
+            # Palabras clave: cancelar, anular + orden/pedido
+            # IMPORTANTE: Sin mencionar productos específicos
+            cancel_keywords = r'(cancel|anul)'
+            order_keywords = r'(orden|pedido|compra)'
+
+            # Detectar si menciona cancelar/anular la orden completa
+            if re.search(cancel_keywords, message_lower) and re.search(order_keywords, message_lower):
+                # Verificar que NO mencione productos específicos (esto sería remove_from_order)
+                # Lista de palabras que indican productos específicos
+                product_indicators = r'(el |la |los |las |mi |este |ese |producto|item|artículo)'
+
+                # Si NO menciona productos específicos, es cancel_order
+                if not re.search(product_indicators + r'.{0,20}' + cancel_keywords, message_lower):
+                    logger.info(f"🎯 [Worker] ✅ REGEX MATCH: cancel_order (bypassing LLM)")
+                    return {
+                        "intent": "cancel_order",
+                        "confidence": 1.0,
+                        "detection_method": "regex_fallback"
+                    }
+
+            # CASO 2: remove_from_order
             # Usar patrones que capturen todas las conjugaciones de los verbos
             remove_keywords = r'(elimin|quit|remov|borr|sac|cancel)'
             order_keywords = r'(orden|pedido|compra)'
-            
+
             if re.search(remove_keywords, message_lower) and re.search(order_keywords, message_lower):
                 logger.info(f"🎯 [Worker] ✅ REGEX MATCH: remove_from_order (bypassing LLM)")
                 return {
@@ -281,8 +303,15 @@ class SyncMessageWorker:
     - goodbye: Despedidas (adiós, chao, hasta luego, etc)
     - create_order: Quiere hacer un pedido o comprar algo
     - check_order: Quiere consultar el estado de un pedido
-    - remove_from_order: Quiere eliminar/quitar/sacar/remover/borrar/cancelar productos de su orden existente
+    - cancel_order: Quiere cancelar/anular su orden completa
+    - remove_from_order: Quiere eliminar/quitar/sacar/remover/borrar productos específicos de su orden existente
     - other: Cualquier otra cosa
+
+    EJEMPLOS DE cancel_order:
+    - "cancela mi orden"
+    - "quiero cancelar el pedido"
+    - "anula mi compra"
+    - "ya no quiero la orden"
 
     EJEMPLOS DE remove_from_order:
     - "elimina el mouse de mi orden"
@@ -293,7 +322,7 @@ class SyncMessageWorker:
 
     MENSAJE DEL USUARIO: "{message}"
 
-    Responde SOLO con el nombre de la intención en minúsculas (greeting, goodbye, create_order, check_order, remove_from_order, o other).
+    Responde SOLO con el nombre de la intención en minúsculas (greeting, goodbye, create_order, check_order, cancel_order, remove_from_order, o other).
     No agregues explicaciones, solo la intención."""
 
             logger.debug(f"🔵 [Worker] Prompt para detección (LLM): {prompt[:200]}...")
@@ -315,7 +344,7 @@ class SyncMessageWorker:
             if result.get("success"):
                 intent_text = result["response"].strip().lower()
                 
-                valid_intents = ["greeting", "goodbye", "create_order", "check_order", "remove_from_order", "other"]
+                valid_intents = ["greeting", "goodbye", "create_order", "check_order", "cancel_order", "remove_from_order", "other"]
                 
                 for valid_intent in valid_intents:
                     if valid_intent in intent_text:

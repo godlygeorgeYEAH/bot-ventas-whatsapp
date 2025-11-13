@@ -286,7 +286,13 @@ async def lifespan(app: FastAPI):
     from app.modules.remove_from_order_module import RemoveFromOrderModule
     remove_from_order_module = RemoveFromOrderModule()
     registry.register(remove_from_order_module)
-    
+
+    # Registrar CancelOrderModule
+    from app.modules.cancel_order_module import CancelOrderModule
+    cancel_order_module = CancelOrderModule()
+    registry.register(cancel_order_module)
+    logger.info("✅ [Registry] CancelOrderModule registrado (intent: cancel_order)")
+
     # Registrar OfferProductModule
     from app.modules.offer_product_module import OfferProductModule
     offer_product_module = OfferProductModule()
