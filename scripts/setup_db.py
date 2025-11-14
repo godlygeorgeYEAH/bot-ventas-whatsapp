@@ -44,7 +44,7 @@ def main():
         if 'orders' in tables:
             columns = [col['name'] for col in inspector.get_columns('orders')]
             logger.info(f"📋 Tabla 'orders' tiene {len(columns)} columnas")
-            
+
             # Verificar columnas clave agregadas en migraciones
             key_columns = ['abandoned_at', 'abandonment_reason', 'delivery_reference', 'confirmed_at']
             for col in key_columns:
@@ -52,6 +52,21 @@ def main():
                     logger.info(f"   ✅ Columna '{col}' presente")
                 else:
                     logger.warning(f"   ⚠️ Columna '{col}' faltante (puede necesitar migración)")
+
+        # Verificar tabla settings (configuración del sistema)
+        if 'settings' in tables:
+            columns = [col['name'] for col in inspector.get_columns('settings')]
+            logger.info(f"📋 Tabla 'settings' tiene {len(columns)} columnas")
+
+            # Verificar columnas clave
+            key_columns = ['id', 'key', 'value', 'description', 'created_at', 'updated_at']
+            for col in key_columns:
+                if col in columns:
+                    logger.info(f"   ✅ Columna '{col}' presente")
+                else:
+                    logger.warning(f"   ⚠️ Columna '{col}' faltante")
+        else:
+            logger.warning("⚠️ Tabla 'settings' no encontrada (necesaria para configuración del sistema)")
         
     except Exception as e:
         logger.error(f"❌ Error inicializando base de datos: {e}")
