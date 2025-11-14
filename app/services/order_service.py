@@ -8,14 +8,28 @@ from app.database.models import Order, OrderItem, OrderStatus, Product, Customer
 from app.services.product_service import ProductService
 from loguru import logger
 import uuid
+import asyncio
 
 
 class OrderService:
     """Servicio para gestionar órdenes"""
-    
+
     def __init__(self, db: Session):
         self.db = db
         self.product_service = ProductService(db)
+
+    def _notify_admins_async(self, notification_coro):
+        """
+        Helper para ejecutar notificaciones de admin de forma asíncrona sin bloquear
+
+        Args:
+            notification_coro: Corutina de notificación a ejecutar
+        """
+        try:
+            asyncio.create_task(notification_coro)
+            logger.debug("📤 Tarea de notificación de admin programada")
+        except Exception as e:
+            logger.warning(f"⚠️ Error programando notificación de admin: {e}")
     
     def generate_order_number(self) -> str:
         """
@@ -146,9 +160,17 @@ class OrderService:
             self.db.add(order)
             self.db.commit()
             self.db.refresh(order)
-            
+
             logger.info(f"✅ Orden creada: {order.order_number}")
-            
+
+            # Notificar a administradores
+            try:
+                from app.services.admin_notification_service import AdminNotificationService
+                admin_service = AdminNotificationService(self.db)
+                self._notify_admins_async(admin_service.notify_order_created(order))
+            except Exception as e:
+                logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
+
             return order
             
         except Exception as e:
@@ -182,12 +204,20 @@ class OrderService:
             # Actualizar estado
             order.status = OrderStatus.CONFIRMED.value
             order.confirmed_at = datetime.utcnow()
-            
+
             self.db.commit()
             self.db.refresh(order)
-            
+
             logger.info(f"✅ Orden confirmada: {order.order_number}")
-            
+
+            # Notificar a administradores
+            try:
+                from app.services.admin_notification_service import AdminNotificationService
+                admin_service = AdminNotificationService(self.db)
+                self._notify_admins_async(admin_service.notify_order_confirmed(order))
+            except Exception as e:
+                logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
+
             return order
             
         except Exception as e:
@@ -224,12 +254,20 @@ class OrderService:
             order.status = OrderStatus.CANCELLED.value
             order.cancelled_at = datetime.utcnow()
             order.cancellation_reason = reason
-            
+
             self.db.commit()
             self.db.refresh(order)
-            
+
             logger.info(f"✅ Orden cancelada: {order.order_number}")
-            
+
+            # Notificar a administradores
+            try:
+                from app.services.admin_notification_service import AdminNotificationService
+                admin_service = AdminNotificationService(self.db)
+                self._notify_admins_async(admin_service.notify_order_cancelled(order, reason))
+            except Exception as e:
+                logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
+
             return order
             
         except Exception as e:
@@ -258,14 +296,30 @@ class OrderService:
                 order.shipped_at = datetime.utcnow()
             elif new_status == OrderStatus.DELIVERED.value:
                 order.delivered_at = datetime.utcnow()
-            
+
+            old_status = order.status
             order.status = new_status
-            
+
             self.db.commit()
             self.db.refresh(order)
-            
+
             logger.info(f"✅ Estado actualizado: {order.order_number} → {new_status}")
-            
+
+            # Notificar a administradores según el nuevo estado
+            try:
+                from app.services.admin_notification_service import AdminNotificationService
+                admin_service = AdminNotificationService(self.db)
+
+                if new_status == OrderStatus.SHIPPED.value:
+                    self._notify_admins_async(admin_service.notify_order_shipped(order))
+                elif new_status == OrderStatus.DELIVERED.value:
+                    self._notify_admins_async(admin_service.notify_order_delivered(order))
+                else:
+                    # Para otros cambios de estado, notificar como modificación
+                    self._notify_admins_async(admin_service.notify_order_modified(order, "status_changed"))
+            except Exception as e:
+                logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
+
             return order
             
         except Exception as e:
@@ -526,12 +580,20 @@ class OrderService:
             order.tax = order.subtotal * 0.19  # Recalcular impuesto
             order.total = order.subtotal + order.tax + order.shipping_cost
             order.updated_at = datetime.now()
-            
+
             self.db.commit()
             self.db.refresh(order)
-            
+
             logger.info(f"✅ Items agregados exitosamente. Nuevo total: ${order.total:.2f}")
-            
+
+            # Notificar a administradores
+            try:
+                from app.services.admin_notification_service import AdminNotificationService
+                admin_service = AdminNotificationService(self.db)
+                self._notify_admins_async(admin_service.notify_order_modified(order, "items_added"))
+            except Exception as e:
+                logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
+
             return order
             
         except Exception as e:
@@ -634,9 +696,17 @@ class OrderService:
             
             self.db.commit()
             self.db.refresh(order)
-            
+
             logger.info(f"✅ Items removidos exitosamente. Nuevo total: ${order.total:.2f}")
-            
+
+            # Notificar a administradores
+            try:
+                from app.services.admin_notification_service import AdminNotificationService
+                admin_service = AdminNotificationService(self.db)
+                self._notify_admins_async(admin_service.notify_order_modified(order, "items_removed"))
+            except Exception as e:
+                logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
+
             return order
             
         except Exception as e:
