@@ -201,6 +201,24 @@ class CancelOrderModule:
 
                     logger.info(f"✅ Orden {order_number} cancelada exitosamente")
 
+                    # Notificar al usuario y limpiar conversación
+                    from app.services.order_notification_service import OrderNotificationService
+                    import asyncio
+
+                    notification_service = OrderNotificationService(db)
+
+                    # Ejecutar notificación asíncrona
+                    try:
+                        asyncio.create_task(
+                            notification_service.notify_order_cancelled(
+                                order_id=order_id,
+                                cancelled_by_admin=False  # Cancelada por el usuario
+                            )
+                        )
+                        logger.info(f"📤 Notificación de cancelación programada para orden {order_number}")
+                    except Exception as notify_error:
+                        logger.error(f"⚠️ Error programando notificación: {notify_error}")
+
                     return {
                         "response": (
                             f"✅ *Orden #{order_number} cancelada exitosamente*\n\n"

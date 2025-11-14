@@ -243,8 +243,125 @@ class OrderNotificationService:
                 # Mismo sistema que confirmación de pago
             
             return success
-            
+
         except Exception as e:
             logger.error(f"❌ Error notificando envío: {e}")
             return False
+
+    async def notify_order_cancelled(self, order_id: str, cancelled_by_admin: bool = False) -> bool:
+        """
+        Notifica al cliente que su orden fue cancelada y limpia la conversación
+
+        Args:
+            order_id: ID de la orden cancelada
+            cancelled_by_admin: Si True, fue cancelada por administrador, sino por el usuario
+
+        Returns:
+            True si se envió exitosamente
+        """
+        try:
+            order = self.db.query(Order).filter(Order.id == order_id).first()
+
+            if not order:
+                logger.warning(f"⚠️ Orden no encontrada: {order_id}")
+                return False
+
+            customer = self.db.query(Customer).filter(
+                Customer.id == order.customer_id
+            ).first()
+
+            if not customer:
+                logger.warning(f"⚠️ Customer no encontrado para orden {order.order_number}")
+                return False
+
+            # Construir mensaje según quien canceló
+            if cancelled_by_admin:
+                message = (
+                    f"❌ *Orden Cancelada*\n\n"
+                    f"Lamentamos informarte que tu orden *{order.order_number}* ha sido cancelada.\n\n"
+                )
+
+                if order.cancellation_reason:
+                    message += f"📝 *Motivo:* {order.cancellation_reason}\n\n"
+
+                message += (
+                    f"💰 Si realizaste un pago, se procesará el reembolso en breve.\n\n"
+                    f"Si tienes preguntas, no dudes en contactarnos.\n\n"
+                    f"Gracias por tu comprensión. 🙏"
+                )
+            else:
+                # Cancelada por el usuario
+                message = (
+                    f"✅ *Orden Cancelada Exitosamente*\n\n"
+                    f"Tu orden *{order.order_number}* ha sido cancelada como solicitaste.\n\n"
+                )
+
+                # Listar productos cancelados
+                message += "📦 *Productos cancelados:*\n"
+                for item in order.items:
+                    message += f"  • {item.product_name} x{item.quantity}\n"
+
+                message += (
+                    f"\n💰 *Total:* ${order.total:.2f}\n\n"
+                    f"Si necesitas hacer un nuevo pedido, estaré encantado de ayudarte. 😊\n\n"
+                    f"Escribe *hola* para comenzar de nuevo."
+                )
+
+            # Enviar notificación con retry logic
+            from app.services.webhook_retry_service import webhook_retry_service
+
+            success, result = await webhook_retry_service.execute_with_retry(
+                self.waha.send_text_message,
+                f"Notificación cancelación orden {order.order_number}",
+                customer.phone,
+                message
+            )
+
+            if success:
+                logger.info(f"✅ Notificación de cancelación enviada para orden {order.order_number}")
+
+                # Limpiar la conversación del usuario (marcar como inactiva)
+                self._clear_customer_conversation(customer.id)
+            else:
+                logger.error(f"❌ Error notificando cancelación después de reintentos: {result}")
+                logger.critical(f"🚨 CRÍTICO: No se pudo notificar cancelación de orden {order.order_number} a {customer.phone}")
+
+            return success
+
+        except Exception as e:
+            logger.error(f"❌ Error notificando cancelación: {e}")
+            return False
+
+    def _clear_customer_conversation(self, customer_id: str) -> int:
+        """
+        Limpia (marca como inactiva) todas las conversaciones activas de un cliente
+
+        Args:
+            customer_id: ID del cliente
+
+        Returns:
+            Número de conversaciones limpiadas
+        """
+        try:
+            from app.database.models import Conversation
+
+            # Marcar todas las conversaciones como inactivas
+            conversations = self.db.query(Conversation).filter(
+                Conversation.customer_id == customer_id,
+                Conversation.is_active == True
+            ).all()
+
+            for conv in conversations:
+                conv.is_active = False
+                logger.info(f"🧹 Conversación {conv.id} marcada como inactiva para customer {customer_id}")
+
+            self.db.commit()
+
+            logger.info(f"✅ {len(conversations)} conversaciones limpiadas para customer {customer_id}")
+            return len(conversations)
+
+        except Exception as e:
+            logger.error(f"❌ Error limpiando conversaciones: {e}")
+            self.db.rollback()
+            return 0
 

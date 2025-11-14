@@ -339,7 +339,21 @@ async def cancel_order(order_id: str, db: Session = Depends(get_db)):
             raise HTTPException(status_code=400, detail="No se puede cancelar una orden ya entregada")
         
         order_service = OrderService(db)
-        order = order_service.cancel_order(order_id)
+        order = order_service.cancel_order(order_id, reason="Cancelada por administrador desde el panel")
+
+        # Notificar al usuario y limpiar la conversación
+        from app.services.order_notification_service import OrderNotificationService
+        notification_service = OrderNotificationService(db)
+
+        try:
+            await notification_service.notify_order_cancelled(
+                order_id=order_id,
+                cancelled_by_admin=True  # Cancelada desde el panel de admin
+            )
+            logger.info(f"✅ Usuario notificado de cancelación de orden {order.order_number}")
+        except Exception as e:
+            logger.error(f"⚠️ Error notificando cancelación de orden, pero orden fue cancelada: {e}")
+            # No lanzar error, la orden ya está cancelada exitosamente
 
         return await get_order(order_id, db)
     
