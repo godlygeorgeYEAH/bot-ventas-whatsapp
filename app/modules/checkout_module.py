@@ -264,13 +264,24 @@ class CheckoutModule:
                 order.payment_method = result.filled_slots.get("payment_method")
                 # ⚠️ Mantener en PENDING - El admin confirmará cuando reciba el pago
                 # order.status permanece como "pending"
-                
+
                 db.commit()
                 db.refresh(order)
-                
+
                 logger.info(f"✅ Orden completada (pending confirmación de pago): {order.order_number}")
                 logger.info(f"   GPS: {order.delivery_latitude},{order.delivery_longitude}")
                 logger.info(f"   Pago: {order.payment_method}")
+
+                # 🔔 Notificar a administradores ahora que el usuario completó todos los datos
+                try:
+                    from app.services.admin_notification_service import AdminNotificationService
+                    import asyncio
+
+                    admin_service = AdminNotificationService(db)
+                    asyncio.create_task(admin_service.notify_order_created(order))
+                    logger.info(f"📤 Notificación de admin programada para orden {order.order_number}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Error programando notificación de admin: {e}")
                 
                 order_service = OrderService(db)
                 summary = order_service.format_order_summary(order)

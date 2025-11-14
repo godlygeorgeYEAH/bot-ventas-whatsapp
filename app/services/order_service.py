@@ -163,13 +163,8 @@ class OrderService:
 
             logger.info(f"✅ Orden creada: {order.order_number}")
 
-            # Notificar a administradores
-            try:
-                from app.services.admin_notification_service import AdminNotificationService
-                admin_service = AdminNotificationService(self.db)
-                self._notify_admins_async(admin_service.notify_order_created(order))
-            except Exception as e:
-                logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
+            # ⚠️ NO notificar aquí - se notificará cuando el usuario proporcione método de pago
+            # La notificación se envía desde CheckoutModule después de payment_method
 
             return order
             
