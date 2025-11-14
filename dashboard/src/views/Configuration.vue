@@ -132,8 +132,8 @@ import {
   User,
   InfoFilled
 } from '@element-plus/icons-vue'
-import MainLayout from '@/layouts/MainLayout.vue'
-import apiClient from '@/api/client'
+import MainLayout from '../layouts/MainLayout.vue'
+import apiClient from '../api/client'
 
 // Estado
 const adminNumbers = ref<string[]>([])
