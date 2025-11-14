@@ -276,10 +276,20 @@ class CheckoutModule:
                 try:
                     from app.services.admin_notification_service import AdminNotificationService
                     import asyncio
+                    import threading
 
                     admin_service = AdminNotificationService(db)
-                    # Use ensure_future instead of create_task for better compatibility from sync context
-                    asyncio.ensure_future(admin_service.notify_order_created(order))
+
+                    # Helper function to run async notification in a separate thread with its own event loop
+                    def run_notification():
+                        try:
+                            asyncio.run(admin_service.notify_order_created(order))
+                        except Exception as e:
+                            logger.warning(f"⚠️ Error en thread de notificación de admin: {e}")
+
+                    # Run in background thread to avoid blocking
+                    notification_thread = threading.Thread(target=run_notification, daemon=True)
+                    notification_thread.start()
                     logger.info(f"📤 Notificación de admin programada para orden {order.order_number}")
                 except Exception as e:
                     logger.warning(f"⚠️ Error programando notificación de admin: {e}")
