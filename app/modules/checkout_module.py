@@ -278,7 +278,8 @@ class CheckoutModule:
                     import asyncio
 
                     admin_service = AdminNotificationService(db)
-                    asyncio.create_task(admin_service.notify_order_created(order))
+                    # Use ensure_future instead of create_task for better compatibility from sync context
+                    asyncio.ensure_future(admin_service.notify_order_created(order))
                     logger.info(f"📤 Notificación de admin programada para orden {order.order_number}")
                 except Exception as e:
                     logger.warning(f"⚠️ Error programando notificación de admin: {e}")
