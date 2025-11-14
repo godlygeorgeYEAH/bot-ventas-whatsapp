@@ -2,21 +2,28 @@
 
 ## 📋 Tabla de Contenidos
 1. [⚠️ CRÍTICO: Detección de Pérdida de Comunicación](#️-crítico-detección-de-pérdida-de-comunicación)
+   - [Detección Reactiva (Principal)](#detección-reactiva-principal)
+   - [Detección Proactiva (Complementaria)](#detección-proactiva-complementaria)
 2. [Sistema de Notificaciones al Admin](#sistema-de-notificaciones-al-admin)
 3. [Estado del Bot](#estado-del-bot)
 4. [Panel de Administrador](#panel-de-administrador)
 5. [Implementación Sugerida](#implementación-sugerida)
+6. [Ejemplos y Escenarios de Testing](#ejemplos-y-escenarios-de-testing)
 
 ---
 
 ## ⚠️ CRÍTICO: Detección de Pérdida de Comunicación
 
-### 🎯 Objetivo
+Este sistema combina dos enfoques complementarios para detectar y manejar problemas de comunicación con WAHA.
+
+### Detección Reactiva (Principal)
+
+#### 🎯 Objetivo
 Cuando el webhook de carrito falla, determinar si el problema es:
 1. **Fallo del webhook solamente** (bot sigue comunicado con WAHA)
 2. **Pérdida total de comunicación** con WAHA (estado crítico)
 
-### 🧠 Lógica de Detección
+#### 🧠 Lógica de Detección
 
 #### Escenario: Webhook de Carrito Falla (4 reintentos)
 
@@ -53,9 +60,9 @@ Bot intenta enviar mensajes iniciales
        5. (Futuro) Webhook a sistema de monitoreo externo
 ```
 
-### 📊 Estados Resultantes
+#### 📊 Estados Resultantes
 
-#### ✅ **Bot Comunicado (Webhook Falló)**
+##### ✅ **Bot Comunicado (Webhook Falló)**
 ```python
 Estado: "degraded"
 Razón: "Webhook de orden falló pero bot responde"
@@ -65,7 +72,7 @@ Acción:
   - Orden en "atención manual" en dashboard
 ```
 
-#### 🚨 **Bot Incomunicado (Pérdida Total)**
+##### 🚨 **Bot Incomunicado (Pérdida Total)**
 ```python
 Estado: "incommunicado_critico"
 Razón: "No se pudo enviar ningún mensaje después de webhook fallido"
@@ -75,9 +82,9 @@ Acción:
   - (Futuro) Notificación por canal alternativo
 ```
 
-### 💻 Implementación en Código
+#### 💻 Implementación en Código
 
-#### Ubicación: `app/api/cart.py` (después del webhook fallido)
+##### Ubicación: `app/api/cart.py` (después del webhook fallido)
 
 ```python
 # ⚠️ FALLBACK: Si ambos mensajes fallaron después de todos los reintentos
@@ -179,9 +186,9 @@ if not success1 and not success2:
         logger.critical(f"🚨 Error en diagnóstico: {diag_error}")
 ```
 
-### 🎨 Panel de Administrador - Indicador Crítico
+#### 🎨 Panel de Administrador - Indicador Crítico
 
-#### Vista cuando Bot está Incomunicado:
+##### Vista cuando Bot está Incomunicado:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -208,7 +215,7 @@ if not success1 and not success2:
 └─────────────────────────────────────────────────────────┘
 ```
 
-### 📊 Nuevo Modelo de BD: `communication_failures`
+#### 📊 Nuevo Modelo de BD: `communication_failures`
 
 ```sql
 CREATE TABLE communication_failures (
@@ -225,7 +232,7 @@ CREATE TABLE communication_failures (
 );
 ```
 
-### 🔧 Servicio: `CommunicationDiagnosticService`
+#### 🔧 Servicio: `CommunicationDiagnosticService`
 
 ```python
 # app/services/communication_diagnostic_service.py
@@ -313,11 +320,11 @@ class CommunicationDiagnosticService:
             return False
 ```
 
-### 🚨 Notificaciones Alternativas (Futuro)
+#### 🚨 Notificaciones Alternativas (Futuro)
 
 Cuando el bot está completamente incomunicado:
 
-#### 1. **Email Urgente**
+##### 1. **Email Urgente**
 ```python
 await email_service.send_urgent_alert(
     to=settings.ADMIN_EMAIL,
@@ -326,7 +333,7 @@ await email_service.send_urgent_alert(
 )
 ```
 
-#### 2. **SMS al Admin**
+##### 2. **SMS al Admin**
 ```python
 await sms_service.send_admin_alert(
     phone=settings.ADMIN_SMS,
@@ -334,7 +341,7 @@ await sms_service.send_admin_alert(
 )
 ```
 
-#### 3. **Webhook a Sistema Externo**
+##### 3. **Webhook a Sistema Externo**
 ```python
 # PagerDuty, Opsgenie, etc
 await monitoring_service.trigger_incident(
@@ -347,23 +354,23 @@ await monitoring_service.trigger_incident(
 )
 ```
 
-#### 4. **Archivo de Log Especial**
+##### 4. **Archivo de Log Especial**
 ```python
 # Para scripts externos que monitorean archivos
 with open("/var/log/bot-critical-failures.log", "a") as f:
     f.write(f"{datetime.utcnow()} | INCOMMUNICADO | {order_id}\n")
 ```
 
-### 📈 Métricas Importantes
+#### 📈 Métricas Importantes
 
-#### Dashboard debe mostrar:
+##### Dashboard debe mostrar:
 - ⏰ **Tiempo desde última comunicación exitosa**
 - 📊 **Tasa de éxito de webhooks** (últimas 24h)
 - 🚨 **Órdenes sin notificar** (contador prominente)
 - 📉 **Historial de incidentes** de comunicación
 - 🔄 **Estado actual del bot** (grande, visible, color-coded)
 
-### ⚙️ Auto-Recuperación
+#### ⚙️ Auto-Recuperación
 
 Cuando el bot se recupera:
 
@@ -385,7 +392,7 @@ if bot_was_incommunicado and message_sent_successfully:
     )
 ```
 
-### 🎯 Prioridad: **CRÍTICA** 🚨
+#### 🎯 Prioridad de Detección Reactiva: **CRÍTICA** 🚨
 
 Este sistema es fundamental porque:
 1. ✅ **Distingue** entre fallos parciales y totales
@@ -393,6 +400,369 @@ Este sistema es fundamental porque:
 3. ✅ **Alerta** inmediatamente cuando hay problema real
 4. ✅ **Permite** respuesta manual rápida
 5. ✅ **Evita** falsos positivos (webhook falla pero bot funciona)
+
+---
+
+### Detección Proactiva (Complementaria)
+
+#### 🎯 Objetivo
+Detectar problemas con WAHA **antes** de que afecten a usuarios reales mediante verificaciones periódicas de salud del sistema.
+
+#### 🔍 Cómo Funciona
+
+```
+Cada 2-5 minutos (configurable):
+    ↓
+Ejecutar healthcheck ligero
+    ├─ GET /api/sessions/{session}/status
+    ├─ Timeout: 10 segundos
+    └─ Verificar respuesta: status == "WORKING"
+
+✅ WAHA responde correctamente
+    ↓
+    - healthcheck_failing = false
+    - Si antes estaba en "degraded" por healthcheck → "online"
+
+❌ WAHA no responde o timeout
+    ↓
+    - healthcheck_failing = true
+    - Estado: "online" → "degraded" (preventivo)
+    - Alerta preventiva al admin (WhatsApp/Email)
+    - Log: "⚠️ Healthcheck fallando - Posibles problemas pronto"
+```
+
+#### 💡 Valor Agregado
+
+**Ventajas:**
+- ✅ Detecta problemas **antes** de que lleguen órdenes
+- ✅ Admin alertado **preventivamente** (1-5 min antes)
+- ✅ Tiempo de respuesta más rápido
+- ✅ Puede prevenir órdenes perdidas
+- ✅ Visibilidad continua del estado del sistema
+
+**Desventajas:**
+- ⚠️ Genera tráfico adicional (bajo: 1 request cada 2-5 min)
+- ⚠️ Posibles falsos positivos (healthcheck falla pero envío funciona)
+- ⚠️ Complejidad adicional en el sistema
+
+#### 🔄 Integración con Detección Reactiva
+
+El sistema **combina ambos enfoques**:
+
+```python
+# Estado del bot considera AMBAS fuentes:
+
+if healthcheck_failing and webhook_failing:
+    # 🚨 Ambos fallan → Altamente probable que WAHA esté caído
+    estado = "incommunicado_critico"
+    confianza = "alta"
+
+elif healthcheck_failing and not webhook_failing:
+    # ⚠️ Solo healthcheck falla → Posible problema intermitente
+    estado = "degraded"
+    confianza = "media"
+    nota = "Healthcheck fallando pero webhooks funcionan"
+
+elif not healthcheck_failing and webhook_failing:
+    # ⚠️ Solo webhook falla → Problema específico de webhook
+    estado = "degraded"
+    confianza = "media"
+    nota = "Webhook fallando pero WAHA responde a healthcheck"
+
+else:
+    # ✅ Ambos funcionan → Todo normal
+    estado = "online"
+```
+
+#### 💻 Implementación Sugerida
+
+##### 1. Servicio de Healthcheck
+
+```python
+# app/services/waha_healthcheck_service.py
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from loguru import logger
+from datetime import datetime
+
+class WAHAHealthcheckService:
+    """Servicio para verificar salud de WAHA proactivamente"""
+
+    def __init__(self):
+        self.scheduler = AsyncIOScheduler()
+        self.check_interval_minutes = 2  # Configurable
+        self.consecutive_failures = 0
+        self.failure_threshold = 2  # Alertar después de 2 fallos consecutivos
+
+    async def start(self):
+        """Inicia el healthcheck periódico"""
+        self.scheduler.add_job(
+            self.check_waha_health,
+            'interval',
+            minutes=self.check_interval_minutes,
+            id='waha_healthcheck'
+        )
+        self.scheduler.start()
+        logger.info(f"✅ Healthcheck iniciado (cada {self.check_interval_minutes} min)")
+
+    async def check_waha_health(self):
+        """Verifica si WAHA está respondiendo"""
+        try:
+            waha = WAHAClient()
+
+            # Intento de healthcheck con timeout corto
+            status = await asyncio.wait_for(
+                waha.get_session_status(),
+                timeout=10.0
+            )
+
+            if status.get("status") == "WORKING":
+                await self._handle_healthcheck_success()
+            else:
+                await self._handle_healthcheck_failure(
+                    f"WAHA status: {status.get('status')}"
+                )
+
+        except asyncio.TimeoutError:
+            await self._handle_healthcheck_failure("Timeout después de 10s")
+        except Exception as e:
+            await self._handle_healthcheck_failure(str(e))
+
+    async def _handle_healthcheck_success(self):
+        """Maneja healthcheck exitoso"""
+        was_failing = self.consecutive_failures > 0
+        self.consecutive_failures = 0
+
+        if was_failing:
+            logger.info("✅ Healthcheck recuperado - WAHA respondiendo")
+
+            # Verificar si debemos cambiar estado del bot
+            bot_status = await bot_status_service.get_current_status()
+
+            if bot_status.get("healthcheck_failing"):
+                await bot_status_service.mark_healthcheck_recovered()
+
+                # Si el estado solo estaba en "degraded" por healthcheck,
+                # y no hay problemas de webhook, volver a "online"
+                if not bot_status.get("webhook_failing"):
+                    await bot_status_service.update_status("online")
+                    await self._notify_admin_recovery()
+
+    async def _handle_healthcheck_failure(self, reason: str):
+        """Maneja healthcheck fallido"""
+        self.consecutive_failures += 1
+
+        logger.warning(
+            f"⚠️ Healthcheck falló ({self.consecutive_failures}/"
+            f"{self.failure_threshold}): {reason}"
+        )
+
+        # Solo alertar después del threshold
+        if self.consecutive_failures >= self.failure_threshold:
+            was_healthy = not await bot_status_service.is_healthcheck_failing()
+
+            if was_healthy:
+                logger.warning("🚨 Healthcheck fallando consistentemente")
+                await bot_status_service.mark_healthcheck_failing()
+
+                # Cambiar a degraded preventivamente
+                current_status = await bot_status_service.get_current_status()
+                if current_status.get("status") == "online":
+                    await bot_status_service.update_status(
+                        "degraded",
+                        reason="Healthcheck fallando - Posibles problemas"
+                    )
+
+                # Alerta preventiva al admin
+                await self._notify_admin_preventive_alert(reason)
+
+    async def _notify_admin_preventive_alert(self, reason: str):
+        """Notifica al admin preventivamente"""
+        try:
+            admin_phone = settings.ADMIN_PHONE
+            waha = WAHAClient()
+
+            message = (
+                f"⚠️ *Alerta Preventiva*\n\n"
+                f"WAHA no respondió al healthcheck.\n"
+                f"Razón: {reason}\n\n"
+                f"El sistema aún funciona pero puede haber "
+                f"problemas pronto.\n\n"
+                f"Recomendación: Revisar WAHA antes de que "
+                f"afecte a usuarios.\n\n"
+                f"Timestamp: {datetime.now().strftime('%H:%M:%S')}"
+            )
+
+            # Intentar notificar (puede fallar si WAHA está caído)
+            await waha.send_text_message(admin_phone, message)
+
+        except Exception as e:
+            logger.error(f"No se pudo enviar alerta preventiva: {e}")
+            # Esto es esperado si WAHA está completamente caído
+
+    async def _notify_admin_recovery(self):
+        """Notifica recuperación del healthcheck"""
+        try:
+            admin_phone = settings.ADMIN_PHONE
+            waha = WAHAClient()
+
+            message = (
+                f"✅ *Sistema Recuperado*\n\n"
+                f"WAHA está respondiendo normalmente.\n"
+                f"Healthcheck exitoso.\n\n"
+                f"Timestamp: {datetime.now().strftime('%H:%M:%S')}"
+            )
+
+            await waha.send_text_message(admin_phone, message)
+
+        except Exception as e:
+            logger.warning(f"No se pudo notificar recuperación: {e}")
+
+# Instancia global
+waha_healthcheck_service = WAHAHealthcheckService()
+```
+
+##### 2. Integración en BotStatusService
+
+```python
+# app/services/bot_status_service.py
+
+class BotStatusService:
+    # ... código existente ...
+
+    async def mark_healthcheck_failing(self):
+        """Marca que el healthcheck está fallando"""
+        bot_status = self.db.query(BotStatus).first()
+        if bot_status:
+            bot_status.healthcheck_failing = True
+            bot_status.healthcheck_last_failure = datetime.utcnow()
+            self.db.commit()
+
+    async def mark_healthcheck_recovered(self):
+        """Marca que el healthcheck se recuperó"""
+        bot_status = self.db.query(BotStatus).first()
+        if bot_status:
+            bot_status.healthcheck_failing = False
+            bot_status.healthcheck_last_success = datetime.utcnow()
+            self.db.commit()
+
+    async def is_healthcheck_failing(self) -> bool:
+        """Verifica si el healthcheck está fallando"""
+        bot_status = self.db.query(BotStatus).first()
+        return bot_status.healthcheck_failing if bot_status else False
+
+    async def get_combined_status(self) -> dict:
+        """Obtiene estado combinado (healthcheck + webhooks)"""
+        bot_status = self.db.query(BotStatus).first()
+
+        if not bot_status:
+            return {"status": "unknown"}
+
+        healthcheck_failing = bot_status.healthcheck_failing
+        webhook_failing = bot_status.waha_consecutive_failures > 0
+
+        # Lógica combinada
+        if healthcheck_failing and webhook_failing:
+            status = "incommunicado_critico"
+            confidence = "high"
+        elif healthcheck_failing:
+            status = "degraded"
+            confidence = "medium"
+            note = "Healthcheck failing but webhooks may work"
+        elif webhook_failing:
+            status = "degraded"
+            confidence = "medium"
+            note = "Webhook failing but WAHA responds to healthcheck"
+        else:
+            status = "online"
+            confidence = "high"
+
+        return {
+            "status": status,
+            "healthcheck_failing": healthcheck_failing,
+            "webhook_failing": webhook_failing,
+            "confidence": confidence,
+            "last_healthcheck": bot_status.healthcheck_last_success,
+            "last_webhook_success": bot_status.waha_last_success
+        }
+```
+
+##### 3. Actualizar Modelo de BD
+
+```sql
+-- Agregar campos a bot_status
+ALTER TABLE bot_status ADD COLUMN healthcheck_failing BOOLEAN DEFAULT FALSE;
+ALTER TABLE bot_status ADD COLUMN healthcheck_last_success DATETIME;
+ALTER TABLE bot_status ADD COLUMN healthcheck_last_failure DATETIME;
+ALTER TABLE bot_status ADD COLUMN healthcheck_consecutive_failures INTEGER DEFAULT 0;
+```
+
+##### 4. Iniciar Healthcheck al Arrancar la App
+
+```python
+# app/main.py
+
+@app.on_event("startup")
+async def startup_event():
+    """Ejecuta al iniciar la aplicación"""
+    logger.info("🚀 Iniciando aplicación...")
+
+    # Iniciar healthcheck proactivo
+    await waha_healthcheck_service.start()
+
+    logger.info("✅ Aplicación iniciada")
+```
+
+#### 📊 Dashboard - Vista con Healthcheck
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  🤖 Estado del Bot                                      │
+├─────────────────────────────────────────────────────────┤
+│  Estado: ⚠️ DEGRADED                                   │
+│                                                          │
+│  📊 Indicadores:                                        │
+│    Healthcheck: ❌ Fallando (hace 2 min)              │
+│    Webhooks:    ✅ Funcionando                         │
+│                                                          │
+│  💡 Interpretación:                                     │
+│  WAHA no responde a healthcheck pero los webhooks      │
+│  aún funcionan. Puede ser problema temporal.           │
+│                                                          │
+│  [Forzar Healthcheck] [Reiniciar WAHA] [Ver Logs]     │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### ⚖️ Comparación: Reactivo vs Proactivo
+
+| Aspecto | Solo Reactivo | Con Proactivo |
+|---------|---------------|---------------|
+| **Tiempo de detección** | 3+ minutos (después de fallo real) | 10 segundos - 5 min |
+| **Órdenes afectadas antes de alertar** | 1+ | 0 (alerta antes) |
+| **Admin preparado** | ❌ Después del problema | ✅ Antes del problema |
+| **Falsos positivos** | Muy bajos | Posibles (healthcheck intermitente) |
+| **Costo operacional** | Solo cuando falla | Constante (bajo) |
+| **Complejidad** | Media | Alta |
+
+#### 🎯 Recomendación de Implementación
+
+**Fase 1 (Esencial)**: Detección Reactiva
+- ✅ Implementar diagnóstico después de webhook fallido
+- ✅ Distinción entre fallo parcial y total
+- ✅ Auto-recuperación
+
+**Fase 2 (Mejora)**: Detección Proactiva
+- ⏳ Agregar healthcheck cada 2-5 minutos
+- ⏳ Alertas preventivas
+- ⏳ Dashboard con indicadores combinados
+
+**Configuración recomendada** (si se implementa proactivo):
+```python
+HEALTHCHECK_ENABLED = True
+HEALTHCHECK_INTERVAL_MINUTES = 3  # Balance entre detección rápida y tráfico
+HEALTHCHECK_FAILURE_THRESHOLD = 2  # Alertar después de 2 fallos consecutivos
+HEALTHCHECK_TIMEOUT_SECONDS = 10
+```
 
 ---
 
@@ -927,6 +1297,36 @@ Orden: Marcada como "Sin Notificar" (requiere llamada urgente)
 
 ---
 
-**Última actualización**: Noviembre 2025  
+## 📚 Ejemplos y Escenarios de Testing
+
+Para entender mejor cómo funciona el sistema de detección de pérdida de comunicación en escenarios reales, consulta el documento complementario:
+
+**📖 [COMMUNICATION_DETECTION_EXAMPLES.md](./COMMUNICATION_DETECTION_EXAMPLES.md)**
+
+Este documento contiene:
+- ✅ **6 escenarios detallados** con timelines paso a paso
+- ✅ **Ejemplos de logs** y mensajes del sistema
+- ✅ **Estados de base de datos** en cada momento
+- ✅ **Vistas del dashboard** para cada situación
+- ✅ **Comparaciones** entre detección reactiva y proactiva
+- ✅ **Matriz de comparación** de todos los escenarios
+
+**Escenarios incluidos:**
+1. 🚨 WAHA completamente caído (pérdida total)
+2. ⚠️ Solo webhook falla, WAHA funciona (fallo parcial)
+3. 🔄 WAHA reiniciándose (auto-recuperación)
+4. 📞 Problema con número del usuario (diagnóstico específico)
+5. ⚡ Red intermitente (resiliencia del sistema)
+6. 🔍 Detección proactiva previene fallo (healthcheck)
+
+**Uso recomendado:**
+- Para **testing**: Usar como casos de prueba durante implementación
+- Para **referencia**: Entender comportamiento esperado en producción
+- Para **debugging**: Comparar comportamiento real vs esperado
+- Para **documentación**: Mostrar a stakeholders cómo funciona el sistema
+
+---
+
+**Última actualización**: Noviembre 2025
 **Estado**: TODOs documentados, pendiente de implementación
 
