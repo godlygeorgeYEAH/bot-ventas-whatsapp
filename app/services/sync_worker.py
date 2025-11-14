@@ -475,13 +475,15 @@ Ejemplos:
                 context_info += f"- Datos recopilados: {context['slots_filled']}\n"
             
             # Construir prompt
+            context_section = f"CONTEXTO ADICIONAL:\n{context_info}" if context_info else ""
+
             prompt = f"""Eres un asistente de ventas profesional por WhatsApp. Tu trabajo es responder de manera amigable y útil.
 
     INTENCIÓN DETECTADA: {intent}
 
     MENSAJE DEL USUARIO: "{message}"
 
-    {'CONTEXTO ADICIONAL:\n' + context_info if context_info else ''}
+    {context_section}
 
     INSTRUCCIONES:
     - greeting: Saluda cordialmente y ofrece ayuda

@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // Usar IP local para acceso desde red (móvil/tablet)
 // Cambiar a 'localhost' si solo vas a usar en esta PC
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://192.168.68.101:8000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
