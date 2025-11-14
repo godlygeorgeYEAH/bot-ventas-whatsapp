@@ -1,7 +1,7 @@
 """
 Servicio para gestión de órdenes
 """
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Callable
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.database.models import Order, OrderItem, OrderStatus, Product, Customer
@@ -9,6 +9,7 @@ from app.services.product_service import ProductService
 from loguru import logger
 import uuid
 import asyncio
+import threading
 
 
 class OrderService:
@@ -18,15 +19,46 @@ class OrderService:
         self.db = db
         self.product_service = ProductService(db)
 
-    def _notify_admins_async(self, notification_coro):
+    def _notify_admins_async(self, order_id: str, notification_func: Callable):
         """
-        Helper para ejecutar notificaciones de admin de forma asíncrona sin bloquear
+        Helper para ejecutar notificaciones de admin de forma asíncrona sin bloquear.
+        Ejecuta la notificación en un thread separado con su propia sesión de DB.
 
         Args:
-            notification_coro: Corutina de notificación a ejecutar
+            order_id: ID de la orden
+            notification_func: Función que recibe (admin_service, order) y retorna la corutina de notificación
         """
+        from config.database import SessionLocal
+        from app.services.admin_notification_service import AdminNotificationService
+
+        def run_notification():
+            thread_db = None
+            try:
+                # Create a new database session for this thread
+                thread_db = SessionLocal()
+
+                # Load the order in this thread's session
+                thread_order = thread_db.query(Order).filter(Order.id == order_id).first()
+
+                if thread_order:
+                    # Create service with thread's database session
+                    admin_service = AdminNotificationService(thread_db)
+
+                    # Get the notification coroutine and run it with its own event loop
+                    notification_coro = notification_func(admin_service, thread_order)
+                    asyncio.run(notification_coro)
+                else:
+                    logger.warning(f"⚠️ No se encontró la orden {order_id} en el thread de notificación")
+            except Exception as e:
+                logger.warning(f"⚠️ Error en thread de notificación de admin: {e}")
+            finally:
+                if thread_db:
+                    thread_db.close()
+
         try:
-            asyncio.create_task(notification_coro)
+            # Run in background thread to avoid blocking
+            notification_thread = threading.Thread(target=run_notification, daemon=True)
+            notification_thread.start()
             logger.debug("📤 Tarea de notificación de admin programada")
         except Exception as e:
             logger.warning(f"⚠️ Error programando notificación de admin: {e}")
@@ -207,9 +239,10 @@ class OrderService:
 
             # Notificar a administradores
             try:
-                from app.services.admin_notification_service import AdminNotificationService
-                admin_service = AdminNotificationService(self.db)
-                self._notify_admins_async(admin_service.notify_order_confirmed(order))
+                self._notify_admins_async(
+                    order.id,
+                    lambda admin_service, order: admin_service.notify_order_confirmed(order)
+                )
             except Exception as e:
                 logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
 
@@ -257,9 +290,11 @@ class OrderService:
 
             # Notificar a administradores
             try:
-                from app.services.admin_notification_service import AdminNotificationService
-                admin_service = AdminNotificationService(self.db)
-                self._notify_admins_async(admin_service.notify_order_cancelled(order, reason))
+                cancel_reason = reason  # Capture for lambda
+                self._notify_admins_async(
+                    order.id,
+                    lambda admin_service, order: admin_service.notify_order_cancelled(order, cancel_reason)
+                )
             except Exception as e:
                 logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
 
@@ -302,16 +337,22 @@ class OrderService:
 
             # Notificar a administradores según el nuevo estado
             try:
-                from app.services.admin_notification_service import AdminNotificationService
-                admin_service = AdminNotificationService(self.db)
-
                 if new_status == OrderStatus.SHIPPED.value:
-                    self._notify_admins_async(admin_service.notify_order_shipped(order))
+                    self._notify_admins_async(
+                        order.id,
+                        lambda admin_service, order: admin_service.notify_order_shipped(order)
+                    )
                 elif new_status == OrderStatus.DELIVERED.value:
-                    self._notify_admins_async(admin_service.notify_order_delivered(order))
+                    self._notify_admins_async(
+                        order.id,
+                        lambda admin_service, order: admin_service.notify_order_delivered(order)
+                    )
                 else:
                     # Para otros cambios de estado, notificar como modificación
-                    self._notify_admins_async(admin_service.notify_order_modified(order, "status_changed"))
+                    self._notify_admins_async(
+                        order.id,
+                        lambda admin_service, order: admin_service.notify_order_modified(order, "status_changed")
+                    )
             except Exception as e:
                 logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
 
@@ -583,9 +624,10 @@ class OrderService:
 
             # Notificar a administradores
             try:
-                from app.services.admin_notification_service import AdminNotificationService
-                admin_service = AdminNotificationService(self.db)
-                self._notify_admins_async(admin_service.notify_order_modified(order, "items_added"))
+                self._notify_admins_async(
+                    order.id,
+                    lambda admin_service, order: admin_service.notify_order_modified(order, "items_added")
+                )
             except Exception as e:
                 logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
 
@@ -696,9 +738,10 @@ class OrderService:
 
             # Notificar a administradores
             try:
-                from app.services.admin_notification_service import AdminNotificationService
-                admin_service = AdminNotificationService(self.db)
-                self._notify_admins_async(admin_service.notify_order_modified(order, "items_removed"))
+                self._notify_admins_async(
+                    order.id,
+                    lambda admin_service, order: admin_service.notify_order_modified(order, "items_removed")
+                )
             except Exception as e:
                 logger.warning(f"⚠️ Error al programar notificación de admin: {e}")
 

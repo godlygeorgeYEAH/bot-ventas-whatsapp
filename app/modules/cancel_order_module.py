@@ -203,18 +203,40 @@ class CancelOrderModule:
 
                     # Notificar al usuario y limpiar conversación
                     from app.services.order_notification_service import OrderNotificationService
+                    from config.database import SessionLocal
                     import asyncio
+                    import threading
 
-                    notification_service = OrderNotificationService(db)
+                    # Store order_id to pass to thread (SQLAlchemy objects are not thread-safe)
+                    cancel_order_id = order_id
 
-                    # Ejecutar notificación asíncrona
-                    try:
-                        asyncio.create_task(
-                            notification_service.notify_order_cancelled(
-                                order_id=order_id,
-                                cancelled_by_admin=False  # Cancelada por el usuario
+                    # Helper function to run async notification in a separate thread with its own event loop and DB session
+                    def run_cancellation_notification():
+                        thread_db = None
+                        try:
+                            # Create a new database session for this thread
+                            thread_db = SessionLocal()
+
+                            # Create service with thread's database session
+                            notification_service = OrderNotificationService(thread_db)
+
+                            # Run async notification with its own event loop
+                            asyncio.run(
+                                notification_service.notify_order_cancelled(
+                                    order_id=cancel_order_id,
+                                    cancelled_by_admin=False  # Cancelada por el usuario
+                                )
                             )
-                        )
+                        except Exception as e:
+                            logger.warning(f"⚠️ Error en thread de notificación de cancelación: {e}")
+                        finally:
+                            if thread_db:
+                                thread_db.close()
+
+                    # Run in background thread to avoid blocking
+                    try:
+                        notification_thread = threading.Thread(target=run_cancellation_notification, daemon=True)
+                        notification_thread.start()
                         logger.info(f"📤 Notificación de cancelación programada para orden {order_number}")
                     except Exception as notify_error:
                         logger.error(f"⚠️ Error programando notificación: {notify_error}")
