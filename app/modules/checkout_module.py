@@ -275,17 +275,36 @@ class CheckoutModule:
                 # 🔔 Notificar a administradores ahora que el usuario completó todos los datos
                 try:
                     from app.services.admin_notification_service import AdminNotificationService
+                    from config.database import SessionLocal
                     import asyncio
                     import threading
 
-                    admin_service = AdminNotificationService(db)
+                    # Store order_id to pass to thread (SQLAlchemy objects are not thread-safe)
+                    order_id = order.id
 
-                    # Helper function to run async notification in a separate thread with its own event loop
+                    # Helper function to run async notification in a separate thread with its own event loop and DB session
                     def run_notification():
+                        thread_db = None
                         try:
-                            asyncio.run(admin_service.notify_order_created(order))
+                            # Create a new database session for this thread
+                            thread_db = SessionLocal()
+
+                            # Load the order in this thread's session
+                            from app.database.models import Order
+                            thread_order = thread_db.query(Order).filter(Order.id == order_id).first()
+
+                            if thread_order:
+                                # Create service with thread's database session
+                                admin_service = AdminNotificationService(thread_db)
+                                # Run async notification with its own event loop
+                                asyncio.run(admin_service.notify_order_created(thread_order))
+                            else:
+                                logger.warning(f"⚠️ No se encontró la orden {order_id} en el thread de notificación")
                         except Exception as e:
                             logger.warning(f"⚠️ Error en thread de notificación de admin: {e}")
+                        finally:
+                            if thread_db:
+                                thread_db.close()
 
                     # Run in background thread to avoid blocking
                     notification_thread = threading.Thread(target=run_notification, daemon=True)
