@@ -397,3 +397,43 @@ class CartSession(Base):
             "is_expired": self.is_expired,
             "is_valid": self.is_valid
         }
+
+
+class Settings(Base):
+    """
+    Configuración del sistema
+
+    Almacena parámetros de configuración como números de administrador,
+    configuraciones del bot, etc.
+    """
+
+    __tablename__ = "settings"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+
+    # Clave única para identificar el parámetro
+    key = Column(String(100), unique=True, nullable=False, index=True)
+
+    # Valor del parámetro (JSON para soportar strings, arrays, objetos)
+    value = Column(JSON, nullable=False)
+
+    # Descripción del parámetro
+    description = Column(Text, nullable=True)
+
+    # Auditoría
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<Settings {self.key}>"
+
+    def to_dict(self):
+        """Convierte el setting a diccionario"""
+        return {
+            "id": self.id,
+            "key": self.key,
+            "value": self.value,
+            "description": self.description,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }

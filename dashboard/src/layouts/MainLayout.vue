@@ -46,6 +46,11 @@
           <el-icon><User /></el-icon>
           <span>Clientes</span>
         </el-menu-item>
+
+        <el-menu-item index="/configuration">
+          <el-icon><Setting /></el-icon>
+          <span>Configuración</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -99,7 +104,8 @@ const pageTitle = computed(() => {
     '/dashboard': 'Dashboard',
     '/orders': 'Órdenes',
     '/products': 'Productos',
-    '/customers': 'Clientes'
+    '/customers': 'Clientes',
+    '/configuration': 'Configuración'
   }
   return titles[route.path] || 'Dashboard'
 })
