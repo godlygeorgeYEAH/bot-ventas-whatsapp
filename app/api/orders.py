@@ -308,8 +308,8 @@ async def update_order_status(
             order.status = request.status
             db.commit()
             db.refresh(order)
-        
-        return get_order(order_id, db)
+
+        return await get_order(order_id, db)
     
     except HTTPException:
         raise
@@ -340,8 +340,8 @@ async def cancel_order(order_id: str, db: Session = Depends(get_db)):
         
         order_service = OrderService(db)
         order = order_service.cancel_order(order_id)
-        
-        return get_order(order_id, db)
+
+        return await get_order(order_id, db)
     
     except HTTPException:
         raise
