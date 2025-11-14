@@ -332,3 +332,92 @@ async def remove_admin_number(request: RemoveAdminNumberRequest, db: Session = D
         logger.error(f"Error eliminando número de admin: {e}", exc_info=True)
         db.rollback()
         raise HTTPException(status_code=500, detail="Error al eliminar número de administrador")
+
+
+# ============================================
+# ENDPOINTS PARA CONFIGURACIÓN DE TIMEOUT DE ÓRDENES
+# ============================================
+
+@router.get("/order-timeout/minutes", response_model=int)
+async def get_order_timeout(db: Session = Depends(get_db)):
+    """
+    Obtener el timeout de órdenes en minutos
+
+    Devuelve el número de minutos después de los cuales una orden pending
+    se marca como abandonada automáticamente (default: 30)
+    """
+    try:
+        setting = db.query(Settings).filter(Settings.key == "order_timeout_minutes").first()
+
+        if not setting:
+            # Devolver default de 30 minutos si no existe
+            return 30
+
+        # El valor debe ser un número
+        if isinstance(setting.value, (int, float)):
+            return int(setting.value)
+        else:
+            logger.warning(f"⚠️ order_timeout_minutes tiene formato inválido: {type(setting.value)}")
+            return 30
+
+    except Exception as e:
+        logger.error(f"Error obteniendo timeout de órdenes: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error al obtener timeout de órdenes")
+
+
+class UpdateOrderTimeoutRequest(BaseModel):
+    timeout_minutes: int
+
+
+@router.put("/order-timeout/minutes")
+async def update_order_timeout(
+    request: UpdateOrderTimeoutRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Actualizar el timeout de órdenes en minutos
+
+    Args:
+        timeout_minutes: Número de minutos (mínimo: 5, máximo: 1440 = 24 horas)
+    """
+    try:
+        timeout = request.timeout_minutes
+
+        # Validar rango
+        if timeout < 5:
+            raise HTTPException(status_code=400, detail="El timeout mínimo es 5 minutos")
+        if timeout > 1440:  # 24 horas
+            raise HTTPException(status_code=400, detail="El timeout máximo es 1440 minutos (24 horas)")
+
+        # Obtener o crear el setting
+        setting = db.query(Settings).filter(Settings.key == "order_timeout_minutes").first()
+
+        if not setting:
+            # Crear nuevo setting
+            setting = Settings(
+                key="order_timeout_minutes",
+                value=timeout,
+                description="Tiempo en minutos después del cual una orden pending se marca como abandonada"
+            )
+            db.add(setting)
+        else:
+            # Actualizar valor existente
+            setting.value = timeout
+
+        db.commit()
+        db.refresh(setting)
+
+        logger.info(f"✅ Timeout de órdenes actualizado a {timeout} minutos")
+
+        return {
+            "success": True,
+            "message": f"Timeout actualizado a {timeout} minutos",
+            "timeout_minutes": timeout
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error actualizando timeout de órdenes: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Error al actualizar timeout de órdenes")

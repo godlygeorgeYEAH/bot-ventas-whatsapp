@@ -79,11 +79,11 @@ class OrderMonitorWorker:
             else:
                 logger.debug("🔍 [OrderMonitorWorker] No hay notificaciones pendientes")
             
-            # 2. Revisar órdenes pending con timeout (30 minutos)
+            # 2. Revisar órdenes pending con timeout configurado
             abandoned_count = await self._check_abandoned_orders(db)
-            
+
             if abandoned_count > 0:
-                logger.info(f"⏰ {abandoned_count} órdenes marcadas como abandonadas (timeout 30 min)")
+                logger.info(f"⏰ {abandoned_count} órdenes marcadas como abandonadas")
             
         except Exception as e:
             logger.error(f"❌ Error en _check_orders: {e}", exc_info=True)
@@ -92,24 +92,33 @@ class OrderMonitorWorker:
     
     async def _check_abandoned_orders(self, db) -> int:
         """
-        Revisa órdenes PENDING que llevan más de 30 minutos y las marca como ABANDONED
-        
+        Revisa órdenes PENDING que exceden el timeout configurado y las marca como ABANDONED
+
+        El timeout es configurable desde settings (default: 30 minutos)
+
         Returns:
             Número de órdenes abandonadas
         """
         from datetime import datetime, timedelta
-        from app.database.models import Order
-        
+        from app.database.models import Order, Settings
+
         try:
-            # Buscar órdenes PENDING que fueron creadas hace más de 30 minutos
-            timeout_threshold = datetime.utcnow() - timedelta(minutes=30)
+            # Leer timeout desde settings (default: 30 minutos)
+            timeout_minutes = 30  # Default
+            timeout_setting = db.query(Settings).filter(Settings.key == "order_timeout_minutes").first()
+            if timeout_setting and isinstance(timeout_setting.value, (int, float)):
+                timeout_minutes = int(timeout_setting.value)
+                logger.debug(f"🕐 Timeout configurado: {timeout_minutes} minutos")
+
+            # Buscar órdenes PENDING que fueron creadas hace más del timeout configurado
+            timeout_threshold = datetime.utcnow() - timedelta(minutes=timeout_minutes)
             
             pending_orders = db.query(Order).filter(
                 Order.status == "pending",
                 Order.created_at < timeout_threshold
             ).all()
-            
-            logger.debug(f"🔍 [OrderMonitorWorker] Encontradas {len(pending_orders)} órdenes pending > 30 min")
+
+            logger.debug(f"🔍 [OrderMonitorWorker] Encontradas {len(pending_orders)} órdenes pending > {timeout_minutes} min")
             
             abandoned_count = 0
             
@@ -121,7 +130,7 @@ class OrderMonitorWorker:
                 order.status = "abandoned"
                 order.abandoned_at = datetime.utcnow()
                 order.abandonment_reason = f"Timeout: Sin completar después de {age_minutes:.0f} minutos"
-                
+
                 # Restaurar stock de los items
                 for item in order.items:
                     if item.product_id:
@@ -130,7 +139,10 @@ class OrderMonitorWorker:
                         if product:
                             product.stock += item.quantity
                             logger.debug(f"   📦 Stock restaurado para {product.name}: +{item.quantity} (nuevo stock: {product.stock})")
-                
+
+                # Limpiar conversación del cliente (marcar como inactiva)
+                self._clear_customer_conversation(db, order.customer_id)
+
                 abandoned_count += 1
             
             if abandoned_count > 0:
@@ -141,6 +153,37 @@ class OrderMonitorWorker:
         except Exception as e:
             logger.error(f"❌ Error en _check_abandoned_orders: {e}", exc_info=True)
             db.rollback()
+            return 0
+
+    def _clear_customer_conversation(self, db, customer_id: str) -> int:
+        """
+        Limpia (marca como inactiva) todas las conversaciones activas de un cliente
+
+        Args:
+            db: Sesión de base de datos
+            customer_id: ID del cliente
+
+        Returns:
+            Número de conversaciones limpiadas
+        """
+        try:
+            from app.database.models import Conversation
+
+            # Marcar todas las conversaciones como inactivas
+            conversations = db.query(Conversation).filter(
+                Conversation.customer_id == customer_id,
+                Conversation.is_active == True
+            ).all()
+
+            for conv in conversations:
+                conv.is_active = False
+                logger.debug(f"   🧹 Conversación {conv.id} marcada como inactiva")
+
+            logger.info(f"   🧹 {len(conversations)} conversaciones limpiadas para customer {customer_id}")
+            return len(conversations)
+
+        except Exception as e:
+            logger.error(f"❌ Error limpiando conversaciones: {e}")
             return 0
 
 
