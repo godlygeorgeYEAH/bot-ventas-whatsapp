@@ -399,13 +399,30 @@ async def waha_webhook(request: Request, background_tasks: BackgroundTasks):
     try:
         data = await request.json()
         event_type = data.get("event")
-        
-        logger.info(f"📨 Webhook: {event_type}")
-        
+
         payload = data.get("payload", {})
-        from_phone = payload.get("from", "")
+        from_phone_raw = payload.get("from", "")
         body = payload.get("body", "")
         message_type = payload.get("type", "")
+
+        # Establecer contexto de cliente para tracking en logs del webhook
+        if from_phone_raw and "@c.us" in from_phone_raw:
+            phone = from_phone_raw.replace("@c.us", "")
+
+            # Obtener conversation_id de BD si existe
+            try:
+                from config.database import get_db_context
+                from app.core.context_manager import ContextManager
+                with get_db_context() as db:
+                    context_manager = ContextManager(db)
+                    user_context = context_manager.get_or_create_context(phone)
+                    conversation_id = user_context.get('conversation_id')
+                    set_client_context(phone, conversation_id)
+            except Exception:
+                # Si falla, al menos establecer el teléfono
+                set_client_context(phone)
+
+        logger.info(f"📨 Webhook: {event_type}")
         
         # Log detallado para mensajes que no sean de texto
         if message_type and message_type != "chat":
@@ -415,9 +432,9 @@ async def waha_webhook(request: Request, background_tasks: BackgroundTasks):
                           for k, v in payload.items()}
             logger.info(f"🔍 [WEBHOOK] Payload keys: {payload_keys}")
         
-        if body and from_phone:
+        if body and from_phone_raw:
             body_preview = body[:100] if len(body) < 100 else f"{body[:100]}..."
-            logger.info(f"💬 De {from_phone}: {body_preview}")
+            logger.info(f"💬 De {from_phone_raw}: {body_preview}")
         
         background_tasks.add_task(process_incoming_message, data)
         logger.debug(f"✅ Tarea en background")
