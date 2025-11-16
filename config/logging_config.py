@@ -2,6 +2,7 @@ from loguru import logger
 from config.settings import settings
 import sys
 from typing import Optional
+from app.core.correlation import correlation_filter
 
 
 def setup_logging(level: Optional[str] = None):
@@ -25,27 +26,29 @@ def setup_logging(level: Optional[str] = None):
     
     # Console handler con formato simplificado para niveles bajos
     if log_level in ["WARNING", "ERROR", "CRITICAL"]:
-        # Formato simple para producción
-        console_format = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>"
+        # Formato simple para producción con client tracking
+        console_format = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{extra[client]: <16}</cyan> | <yellow>{extra[conv_id]}</yellow> | <level>{message}</level>"
     else:
-        # Formato detallado para desarrollo
-        console_format = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>"
-    
+        # Formato detallado para desarrollo con client tracking
+        console_format = "<green>{time:HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{extra[client]: <16}</cyan> | <yellow>{extra[conv_id]}</yellow> | <cyan>{name}</cyan>:<cyan>{function}</cyan> - <level>{message}</level>"
+
     logger.add(
         sys.stdout,
         format=console_format,
         level=log_level,
-        colorize=True
+        colorize=True,
+        filter=correlation_filter
     )
     
-    # File handler - siempre guarda DEBUG o superior
+    # File handler - siempre guarda DEBUG o superior con client tracking
     logger.add(
         "logs/app_{time:YYYY-MM-DD}.log",
         rotation="00:00",
         retention="30 days",
         compression="zip",
-        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function} - {message}",
-        level="DEBUG"
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {extra[client]: <16} | {extra[conv_id]} | {name}:{function} - {message}",
+        level="DEBUG",
+        filter=correlation_filter
     )
     
     logger.info(f"✓ Logging configurado (nivel: {log_level})")
