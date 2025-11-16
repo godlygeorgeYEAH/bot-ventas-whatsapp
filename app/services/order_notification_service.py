@@ -9,6 +9,7 @@ from loguru import logger
 from app.database.models import Order, Customer
 from app.clients.waha_client import WAHAClient
 from config.settings import settings
+from app.core.correlation import set_client_context
 
 
 class OrderNotificationService:
@@ -84,19 +85,22 @@ class OrderNotificationService:
             return 0
     
     async def _send_confirmation_notification(
-        self, 
-        order: Order, 
+        self,
+        order: Order,
         customer: Customer
     ) -> bool:
         """
         Envía notificación de confirmación de pago al cliente (con retry logic)
-        
+
         Returns:
             True si se envió exitosamente
         """
         try:
+            # Establecer contexto de cliente para tracking en logs
+            set_client_context(customer.phone, order.conversation_id)
+
             from app.services.webhook_retry_service import webhook_retry_service
-            
+
             # Formatear mensaje
             message = self._format_confirmation_message(order)
             

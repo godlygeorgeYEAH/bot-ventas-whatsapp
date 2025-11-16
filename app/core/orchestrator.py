@@ -9,6 +9,7 @@ from app.modules.registry import module_registry
 from app.clients.ollama_client import OllamaClient
 from app.database.repository import ConversationRepository
 from app.core.confirmation_manager import ConfirmationManager
+from app.core.correlation import set_client_context
 
 class ConversationState:
     """Estados posibles de una conversación"""
@@ -36,9 +37,14 @@ class Orchestrator:
         """
         Procesa un mensaje dentro del flujo de conversación
         """
+        # Establecer contexto de cliente para tracking en logs
+        phone = context.get("customer_phone")
         conversation_id = context.get("conversation_id")
+        if phone:
+            set_client_context(phone, conversation_id)
+
         state = context.get("conversation_state", ConversationState.IDLE)
-        
+
         logger.info(f"Orchestrator procesando en estado: {state}")
         
         # Si está inactivo, es un nuevo intent

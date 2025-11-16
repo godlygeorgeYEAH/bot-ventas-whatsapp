@@ -9,6 +9,7 @@ from app.database.repository import (
     ConversationRepository,
     MessageRepository
 )
+from app.core.correlation import set_client_context
 
 
 class ContextManager:
@@ -39,7 +40,10 @@ class ContextManager:
             conversation = self.conversation_repo.create_conversation(
                 customer.id, self.db
             )
-        
+
+        # Establecer contexto de cliente para tracking en logs
+        set_client_context(phone, conversation.id)
+
         # Obtener historial de mensajes
         messages = self.message_repo.get_conversation_history(
             conversation.id, 
@@ -179,7 +183,7 @@ class ContextManager:
     ) -> None:
         """
         Actualiza el contexto relacionado con un módulo
-        
+
         Args:
             phone: Teléfono del usuario
             module_name: Nombre del módulo
@@ -190,12 +194,15 @@ class ContextManager:
         conversation = self.conversation_repo.get_active_conversation(
             customer.id, self.db
         )
-        
+
         if not conversation:
             conversation = self.conversation_repo.create_conversation(
                 customer.id, self.db
             )
-        
+
+        # Establecer contexto de cliente para tracking en logs
+        set_client_context(phone, conversation.id)
+
         # Actualizar campos específicos del módulo
         if 'current_slot' in context_updates:
             conversation.current_slot = context_updates['current_slot']
@@ -265,10 +272,10 @@ class ContextManager:
     def get_module_context(self, phone: str) -> Dict[str, Any]:
         """
         Obtiene el contexto relacionado con módulos
-        
+
         Args:
             phone: Teléfono del usuario
-            
+
         Returns:
             Dict con contexto de módulos
         """
@@ -277,12 +284,15 @@ class ContextManager:
         conversation = self.conversation_repo.get_active_conversation(
             customer.id, self.db
         )
-        
+
         if not conversation:
             conversation = self.conversation_repo.create_conversation(
                 customer.id, self.db
             )
-        
+
+        # Establecer contexto de cliente para tracking en logs
+        set_client_context(phone, conversation.id)
+
         # Construir contexto base
         # Asegurar que slots_data y validation_attempts sean siempre diccionarios
         slots_data = conversation.slots_data or {}
@@ -314,7 +324,7 @@ class ContextManager:
     def clear_module_context(self, phone: str) -> None:
         """
         Limpia el contexto de módulos (después de completar un proceso)
-        
+
         Args:
             phone: Teléfono del usuario
         """
@@ -323,11 +333,14 @@ class ContextManager:
         conversation = self.conversation_repo.get_active_conversation(
             customer.id, self.db
         )
-        
+
         if not conversation:
             # Si no hay conversación, no hay nada que limpiar
             return
-        
+
+        # Establecer contexto de cliente para tracking en logs
+        set_client_context(phone, conversation.id)
+
         conversation.current_module = None
         conversation.current_slot = None
         conversation.slots_data = {}

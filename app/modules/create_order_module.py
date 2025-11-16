@@ -10,6 +10,7 @@ from app.services.product_service import ProductService
 from app.services.order_service import OrderService
 from app.modules.multi_product_handler import MultiProductHandler
 from app.database.models import Customer
+from app.core.correlation import set_client_context
 
 
 class CreateOrderModule:
@@ -90,15 +91,18 @@ class CreateOrderModule:
     ) -> Dict[str, Any]:
         """
         Maneja el mensaje del usuario en el contexto de crear orden
-        
+
         Args:
             message: Mensaje del usuario
             context: Contexto de la conversación
             phone: Teléfono del usuario
-            
+
         Returns:
             Dict con respuesta y datos actualizados
         """
+        # Establecer contexto de cliente para tracking en logs
+        set_client_context(phone, context.get('conversation_id'))
+
         logger.debug(f"🛒 [CreateOrderModule] Procesando: '{message[:30]}...'")
         logger.trace(f"📦 [CreateOrderModule] Contexto: state={context.get('conversation_state')}, "
                     f"slot={context.get('current_slot')}, wait_confirm={context.get('waiting_location_confirmation')}")

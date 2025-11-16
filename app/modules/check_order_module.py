@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.services.order_service import OrderService
 from app.database.repository import CustomerRepository
 from config.database import get_db_context
+from app.core.correlation import set_client_context
 
 
 class CheckOrderModule:
@@ -41,20 +42,23 @@ class CheckOrderModule:
     ) -> Dict[str, Any]:
         """
         Maneja la consulta de órdenes
-        
+
         ⚡ COMPORTAMIENTO SIMPLE:
         Cuando el LLM detecta intent "check_order", este módulo
         automáticamente muestra la última orden relevante del cliente
         sin pedir ninguna información adicional.
-        
+
         Args:
             message: Mensaje del usuario (no se usa, solo para contexto)
             context: Contexto de la conversación (no se usa)
             phone: Número de teléfono del usuario
-            
+
         Returns:
             Dict con response y context_updates
         """
+        # Establecer contexto de cliente para tracking en logs
+        set_client_context(phone, context.get('conversation_id'))
+
         logger.info(f"🔍 [CheckOrderModule] Intent detectado por LLM: Mostrando última orden relevante")
         
         try:
