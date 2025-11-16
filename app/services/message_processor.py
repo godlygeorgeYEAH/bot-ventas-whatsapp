@@ -6,6 +6,7 @@ from app.clients.waha_client import WAHAClient
 from app.clients.ollama_client import OllamaClient
 from app.clients.whisper_client import WhisperClient
 from app.core.context_manager import ContextManager
+from app.core.correlation import set_client_context
 
 from app.core.intent_detector import IntentDetector
 from config.database import get_db_context
@@ -47,6 +48,10 @@ class MessageProcessor:
                 
                 logger.info(f"🔵 [2/6] Obteniendo/creando contexto...")
                 context = context_manager.get_or_create_context(phone)
+
+                # Establecer contexto de cliente para tracking en logs
+                set_client_context(phone, context.get('conversation_id'))
+
                 logger.info(f"🔵 [2/6] Contexto obtenido. Estado: {context.get('conversation_state', 'IDLE')}")
                 
                 logger.info(f"🔵 [3/6] Guardando mensaje...")
@@ -191,7 +196,10 @@ class MessageProcessor:
                 
                 # Obtener contexto
                 context = context_manager.get_or_create_context(phone)
-                
+
+                # Establecer contexto de cliente para tracking en logs
+                set_client_context(phone, context.get('conversation_id'))
+
                 # Procesar la transcripcion
                 response = await self._process_intent(
                     phone=phone,
@@ -258,6 +266,10 @@ class MessageProcessor:
                 # Si hay caption, procesarlo
                 if caption:
                     context = context_manager.get_or_create_context(phone)
+
+                    # Establecer contexto de cliente para tracking en logs
+                    set_client_context(phone, context.get('conversation_id'))
+
                     response = await self._process_intent(
                         phone=phone,
                         message=caption,

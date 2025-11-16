@@ -7,6 +7,7 @@ from loguru import logger
 
 from app.database.models import Order, Settings, Customer
 from app.clients.waha_client import WAHAClient
+from app.core.correlation import set_client_context
 
 
 class AdminNotificationService:
@@ -193,6 +194,9 @@ class AdminNotificationService:
             if not customer:
                 logger.warning(f"⚠️ Customer no encontrado para orden {order.order_number}")
                 return 0
+
+            # Establecer contexto de cliente para tracking en logs
+            set_client_context(customer.phone, order.conversation_id)
 
             # Formatear mensaje
             message = self._format_order_message(
