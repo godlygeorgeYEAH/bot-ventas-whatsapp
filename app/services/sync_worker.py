@@ -8,6 +8,7 @@ from loguru import logger
 from typing import Dict, Any
 from config.database import get_db_context
 from app.core.context_manager import ContextManager
+from app.core.correlation import set_client_context
 
 
 class SyncMessageWorker:
@@ -89,7 +90,11 @@ class SyncMessageWorker:
                 context_manager = ContextManager(db)
                 user_context = context_manager.get_or_create_context(phone)
                 module_context = context_manager.get_module_context(phone)
-            
+
+            # Actualizar contexto con conversation_id para logs
+            conversation_id = user_context.get('conversation_id')
+            set_client_context(phone, conversation_id)
+
             logger.info(f"🔵 [Worker] Contexto leído de BD: estado={module_context.get('conversation_state')}, módulo={module_context.get('current_module')}, slot={module_context.get('current_slot')}")
             logger.info(f"📦 [Worker] FLAGS: wait_confirm={module_context.get('waiting_location_confirmation')}, "
                         f"prev_offered={module_context.get('previous_location_offered')}")

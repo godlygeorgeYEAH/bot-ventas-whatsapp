@@ -38,6 +38,7 @@ from app.services.sync_worker import sync_worker
 from app.core.module_registry import get_module_registry
 from app.modules.create_order_module import CreateOrderModule
 from app.modules.check_order_module import CheckOrderModule
+from app.core.correlation import set_client_context
 
 async def process_buffered_messages(
     phone: str,
@@ -86,7 +87,10 @@ async def process_incoming_message(webhook_data: Dict):
             return
         
         phone = phone_raw.replace("@c.us", "")
-        
+
+        # Establecer contexto de cliente para tracking en logs
+        set_client_context(phone)
+
         logger.info(f"📱 Mensaje de {phone}: {message_type}")
         
         # ⚠️ VERIFICACIÓN PRIORITARIA: Revisar si es un mensaje de ubicación ANTES de procesar como texto
