@@ -13,6 +13,7 @@ from app.database.models import Order, OrderItem, Customer, Product
 from app.services.order_service import OrderService
 from app.core.slots.slot_definition import SlotDefinition, SlotType
 from app.core.slots.slot_manager import SlotManager
+from app.core.correlation import set_client_context
 
 
 class CheckoutModule:
@@ -84,6 +85,9 @@ class CheckoutModule:
         4. Si dice NO o no hay historial: inicia slot filling (GPS + referencia + pago)
         5. Cuando todo está completo, confirma la orden
         """
+        # Establecer contexto de cliente para tracking en logs
+        set_client_context(phone, context.get('conversation_id'))
+
         logger.info(f"🔄 [{self.name}] Procesando checkout para {phone}")
         logger.info(f"   Mensaje: {message[:50]}...")
         logger.info(f"   Contexto: current_module={context.get('current_module')}, order_id={context.get('checkout_order_id')}")

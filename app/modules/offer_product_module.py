@@ -8,6 +8,7 @@ from config.settings import settings
 from app.services.offer_service import OfferService
 from app.services.order_service import OrderService
 from app.helpers.offer_helper import OfferHelper
+from app.core.correlation import set_client_context
 
 
 class OfferProductModule:
@@ -41,15 +42,18 @@ class OfferProductModule:
     def handle(self, message: str, context: Dict[str, Any], phone: str) -> Dict[str, Any]:
         """
         Maneja la respuesta del usuario a un ofrecimiento
-        
+
         Args:
             message: Mensaje del usuario
             context: Contexto de la conversación
             phone: Número del usuario
-            
+
         Returns:
             Dict con "response" y "context_updates"
         """
+        # Establecer contexto de cliente para tracking en logs
+        set_client_context(phone, context.get('conversation_id'))
+
         logger.info(f"🎁 [OfferProductModule] Procesando respuesta a ofrecimiento: '{message[:30]}...'")
         
         # Obtener información del ofrecimiento
