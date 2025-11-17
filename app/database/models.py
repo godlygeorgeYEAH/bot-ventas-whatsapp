@@ -474,8 +474,8 @@ class BotStatus(Base):
     # Contador de fallos consecutivos
     waha_consecutive_failures = Column(Integer, default=0)
 
-    # Metadata adicional
-    metadata = Column(JSON, default=dict)
+    # Metadata adicional (renombrado para evitar conflicto con SQLAlchemy)
+    extra_data = Column(JSON, default=dict)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -491,7 +491,7 @@ class BotStatus(Base):
             "last_update": self.last_update.isoformat() if self.last_update else None,
             "waha_last_success": self.waha_last_success.isoformat() if self.waha_last_success else None,
             "waha_consecutive_failures": self.waha_consecutive_failures,
-            "metadata": self.metadata,
+            "extra_data": self.extra_data,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }

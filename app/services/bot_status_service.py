@@ -75,7 +75,7 @@ class BotStatusService:
             bot_status.reason = reason
 
         if metadata:
-            bot_status.metadata = metadata
+            bot_status.extra_data = metadata
 
         # Actualizar contador de fallos
         if status == "incommunicado_critico":
@@ -133,7 +133,7 @@ class BotStatusService:
             "last_update": bot_status.last_update,
             "waha_last_success": bot_status.waha_last_success,
             "consecutive_failures": bot_status.waha_consecutive_failures,
-            "metadata": bot_status.metadata
+            "extra_data": bot_status.extra_data
         }
 
     async def get_recent_failures_count(self, minutes: int = 5) -> int:
@@ -193,5 +193,5 @@ class BotStatusService:
             "last_success_timestamp": bot_status.waha_last_success,
             "seconds_since_last_success": time_since_success,
             "last_update": bot_status.last_update,
-            "metadata": bot_status.metadata
+            "extra_data": bot_status.extra_data
         }

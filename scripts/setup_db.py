@@ -74,7 +74,7 @@ def main():
             logger.info(f"📋 Tabla 'bot_status' tiene {len(columns)} columnas")
 
             # Verificar columnas clave
-            key_columns = ['id', 'status', 'reason', 'last_update', 'waha_last_success', 'waha_consecutive_failures']
+            key_columns = ['id', 'status', 'reason', 'last_update', 'waha_last_success', 'waha_consecutive_failures', 'extra_data']
             for col in key_columns:
                 if col in columns:
                     logger.info(f"   ✅ Columna '{col}' presente")

@@ -40,7 +40,7 @@ def create_bot_status_table(db):
         last_update DATETIME NOT NULL,
         waha_last_success DATETIME,
         waha_consecutive_failures INTEGER DEFAULT 0,
-        metadata TEXT DEFAULT '{}',
+        extra_data TEXT DEFAULT '{}',
         created_at DATETIME NOT NULL,
         updated_at DATETIME NOT NULL
     )
@@ -95,7 +95,7 @@ def initialize_bot_status(db):
     insert_sql = """
     INSERT INTO bot_status (
         id, status, reason, last_update, waha_last_success,
-        waha_consecutive_failures, metadata, created_at, updated_at
+        waha_consecutive_failures, extra_data, created_at, updated_at
     ) VALUES (
         :id, 'online', 'Sistema iniciado', :now, :now,
         0, '{}', :now, :now
