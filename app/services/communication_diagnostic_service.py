@@ -288,11 +288,56 @@ class CommunicationDiagnosticService:
             }
         )
 
-        # TODO: Notificar por canales alternativos
-        # - Email urgente al admin
-        # - SMS al admin
-        # - Webhook a sistema de monitoreo externo
-        # - Escribir a archivo de log especial
+        # TODO: IMPLEMENTAR COMUNICACIÓN DE EMERGENCIA
+        # 🚨 PRIORIDAD ALTA - Sin esto, pérdidas totales quedan sin notificación
+        #
+        # El bot NO puede usar WhatsApp. Implementar canales alternativos:
+        #
+        # 1. SERVICIO DE EMAIL (ejemplo con SendGrid/AWS SES):
+        #    from app.services.email_service import EmailService
+        #    await EmailService.send_critical_alert(
+        #        to=settings.admin_email,
+        #        subject=f"🚨 BOT INCOMUNICADO - Orden {order.order_number}",
+        #        body={
+        #            "order_id": order_id,
+        #            "customer_phone": customer_phone,
+        #            "timestamp": datetime.utcnow(),
+        #            "failure_id": failure.id
+        #        }
+        #    )
+        #
+        # 2. SERVICIO DE SMS (ejemplo con Twilio):
+        #    from app.services.sms_service import SMSService
+        #    await SMSService.send_urgent(
+        #        to=settings.admin_sms_phone,
+        #        message=f"🚨 Bot incomunicado. Orden afectada. Revisar logs."
+        #    )
+        #
+        # 3. WEBHOOK A SISTEMA EXTERNO (PagerDuty, Slack, Discord):
+        #    await self._notify_external_monitoring({
+        #        "event_type": "bot_communication_loss",
+        #        "severity": "critical",
+        #        "order_id": order_id,
+        #        "customer_phone": customer_phone,
+        #        "failure_id": failure.id
+        #    })
+        #
+        # 4. ARCHIVO DE FALLOS CRÍTICOS:
+        #    with open("/logs/critical_failures.log", "a") as f:
+        #        f.write(json.dumps({
+        #            "timestamp": datetime.utcnow().isoformat(),
+        #            "order_id": order_id,
+        #            "customer_phone": customer_phone,
+        #            "failure_id": failure.id
+        #        }) + "\n")
+        #
+        # VARIABLES DE ENTORNO NECESARIAS (.env):
+        # - ADMIN_EMAIL=admin@example.com
+        # - ADMIN_SMS_PHONE=+1234567890
+        # - SENDGRID_API_KEY=xxx
+        # - TWILIO_ACCOUNT_SID=xxx
+        # - TWILIO_AUTH_TOKEN=xxx
+        # - MONITORING_WEBHOOK_URL=https://hooks.slack.com/xxx
 
         return {
             "bot_reachable": False,

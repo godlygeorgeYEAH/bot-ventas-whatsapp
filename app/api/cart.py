@@ -653,10 +653,33 @@ async def complete_cart(
                     logger.info(f"   Tipo de fallo: {diagnostic_result['failure_type']}")
                     logger.info(f"   Estado del bot: {diagnostic_result['status']}")
 
-                    # TODO (Futuro): Si pérdida total, notificar por canales alternativos
-                    # - Email urgente al admin
-                    # - SMS al admin
-                    # - Webhook a sistema de monitoreo externo
+                    # TODO: COMUNICACIÓN DE EMERGENCIA EN PÉRDIDA TOTAL
+                    # Cuando diagnostic_result['failure_type'] == "TOTAL_COMMUNICATION_LOSS":
+                    #
+                    # CRÍTICO: El bot NO puede comunicarse por WhatsApp. Implementar canales alternativos:
+                    #
+                    # 1. Email urgente al admin:
+                    #    - Asunto: "🚨 BOT INCOMUNICADO - Orden {order_number}"
+                    #    - Incluir: orden, cliente, timestamp, estado del sistema
+                    #    - Prioridad: ALTA
+                    #
+                    # 2. SMS al admin (servicio como Twilio):
+                    #    - Mensaje corto: "Bot incomunicado. Orden {order_number} cliente {phone}"
+                    #
+                    # 3. Webhook a sistema de monitoreo externo (PagerDuty, Slack, etc):
+                    #    - Crear incidente automático
+                    #    - Incluir toda la información de diagnóstico
+                    #
+                    # 4. Escribir a archivo crítico separado:
+                    #    - /logs/critical_failures.log con timestamp
+                    #    - Facilita auditoría posterior
+                    #
+                    # 5. Base de datos externa (opcional):
+                    #    - Replicar registro a DB de monitoreo externo
+                    #
+                    # NOTA: Actualmente el sistema solo registra en logs y BD local.
+                    #       NO hay reintentos automáticos después del diagnóstico.
+                    #       La orden queda en estado PENDING esperando intervención manual.
 
                 except Exception as diag_error:
                     logger.critical(f"🚨 Error en diagnóstico: {diag_error}", exc_info=True)

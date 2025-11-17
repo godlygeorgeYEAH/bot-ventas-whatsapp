@@ -99,8 +99,19 @@ class WebhookRetryService:
 # Distribución de reintentos en ~3 minutos para dar tiempo a que WAHA arranque:
 # Intento 1: 0s
 # Intento 2: +30s = 30s
-# Intento 3: +60s = 90s  
+# Intento 3: +60s = 90s
 # Intento 4: +90s = 180s (3 minutos)
+#
+# ⚠️ IMPORTANTE: Límite de reintentos
+# - Después de estos 4 intentos, NO hay reintentos automáticos adicionales
+# - Si todos fallan, se ejecuta el diagnóstico de comunicación (CommunicationDiagnosticService)
+# - El diagnóstico es de UN SOLO INTENTO (timeout de 10s)
+# - Si el diagnóstico detecta pérdida total, la orden queda en PENDING esperando intervención manual
+#
+# TODO: Considerar estrategia de reintentos a largo plazo para pérdidas totales
+# - ¿Reintentar cada X minutos durante Y horas?
+# - ¿Notificar al admin después de N fallos consecutivos?
+# - ¿Marcar orden como "requiere_atención_urgente" para vista de admin?
 webhook_retry_service = WebhookRetryService(
     max_retries=3,          # 3 reintentos (4 intentos totales)
     initial_delay=30.0,     # Empezar con 30 segundos

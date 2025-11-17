@@ -80,6 +80,21 @@ class BotStatusService:
         # Actualizar contador de fallos
         if status == "incommunicado_critico":
             bot_status.waha_consecutive_failures += 1
+
+            # TODO: NOTIFICACIÓN DE EMERGENCIA cuando bot pasa a incommunicado_critico
+            # Este estado indica que el bot NO puede enviar mensajes por WhatsApp.
+            # Aquí debería dispararse notificación por canales alternativos:
+            #
+            # if bot_status.waha_consecutive_failures >= 1:  # Primera vez
+            #     await EmergencyNotificationService.notify_critical_state(
+            #         status="incommunicado_critico",
+            #         consecutive_failures=bot_status.waha_consecutive_failures,
+            #         reason=reason,
+            #         metadata=metadata
+            #     )
+            #
+            # Ver también: communication_diagnostic_service.py línea 291
+
         elif status == "online":
             bot_status.waha_consecutive_failures = 0
             bot_status.waha_last_success = datetime.utcnow()
