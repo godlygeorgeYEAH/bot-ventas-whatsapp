@@ -159,7 +159,7 @@ class CommunicationDiagnosticService:
             True si la notificación se envió exitosamente
         """
         try:
-            admin_phone = settings.ADMIN_PHONE
+            admin_phone = settings.admin_phone
 
             if not admin_phone:
                 logger.warning("⚠️ ADMIN_PHONE no configurado en settings")

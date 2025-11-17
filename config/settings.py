@@ -61,7 +61,10 @@ class Settings(BaseSettings):
     # WebApp Carrito
     webapp_base_url: str = "http://localhost:5174"  # URL base de la webapp del carrito
     cart_session_hours: int = 24  # Horas de validez de una sesión de carrito
-    
+
+    # Admin Configuration
+    admin_phone: str = ""  # Número de WhatsApp del administrador para notificaciones
+
     class Config:
         env_file = ".env"
         case_sensitive = False
