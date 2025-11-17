@@ -67,6 +67,36 @@ def main():
                     logger.warning(f"   ⚠️ Columna '{col}' faltante")
         else:
             logger.warning("⚠️ Tabla 'settings' no encontrada (necesaria para configuración del sistema)")
+
+        # Verificar tabla bot_status (monitoreo del bot)
+        if 'bot_status' in tables:
+            columns = [col['name'] for col in inspector.get_columns('bot_status')]
+            logger.info(f"📋 Tabla 'bot_status' tiene {len(columns)} columnas")
+
+            # Verificar columnas clave
+            key_columns = ['id', 'status', 'reason', 'last_update', 'waha_last_success', 'waha_consecutive_failures']
+            for col in key_columns:
+                if col in columns:
+                    logger.info(f"   ✅ Columna '{col}' presente")
+                else:
+                    logger.warning(f"   ⚠️ Columna '{col}' faltante")
+        else:
+            logger.warning("⚠️ Tabla 'bot_status' no encontrada (necesaria para monitoreo del sistema)")
+
+        # Verificar tabla communication_failures (registro de fallos)
+        if 'communication_failures' in tables:
+            columns = [col['name'] for col in inspector.get_columns('communication_failures')]
+            logger.info(f"📋 Tabla 'communication_failures' tiene {len(columns)} columnas")
+
+            # Verificar columnas clave
+            key_columns = ['id', 'failure_type', 'order_id', 'diagnostic_user_reached', 'diagnostic_admin_reached']
+            for col in key_columns:
+                if col in columns:
+                    logger.info(f"   ✅ Columna '{col}' presente")
+                else:
+                    logger.warning(f"   ⚠️ Columna '{col}' faltante")
+        else:
+            logger.warning("⚠️ Tabla 'communication_failures' no encontrada (necesaria para monitoreo de comunicación)")
         
     except Exception as e:
         logger.error(f"❌ Error inicializando base de datos: {e}")
