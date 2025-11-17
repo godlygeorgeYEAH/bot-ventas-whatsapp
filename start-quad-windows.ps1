@@ -63,33 +63,25 @@ Write-Host ""
 
 # Cuadrante Superior Izquierdo (0, 0)
 Write-Host "[1/4] Ventana superior izquierda - bot-ventas-whatsapp (activate)" -ForegroundColor Cyan
-$window1 = Start-QuadrantWindow -X 0 -Y 0 `
-    -WorkingDirectory "C:\work\work\Context Bot V2\bot-ventas-whatsapp" `
-    -Command "..\libs\scripts\activate"
+$window1 = Start-QuadrantWindow -X 0 -Y 0 -WorkingDirectory "C:\work\work\Context Bot V2\bot-ventas-whatsapp" -Command "..\libs\scripts\activate"
 
 Start-Sleep -Milliseconds 300
 
 # Cuadrante Superior Derecho (mitad del ancho, 0)
 Write-Host "[2/4] Ventana superior derecha - bot-ventas-whatsapp (activate)" -ForegroundColor Cyan
-$window2 = Start-QuadrantWindow -X $quadrantWidth -Y 0 `
-    -WorkingDirectory "C:\work\work\Context Bot V2\bot-ventas-whatsapp" `
-    -Command "..\libs\scripts\activate"
+$window2 = Start-QuadrantWindow -X $quadrantWidth -Y 0 -WorkingDirectory "C:\work\work\Context Bot V2\bot-ventas-whatsapp" -Command "..\libs\scripts\activate"
 
 Start-Sleep -Milliseconds 300
 
 # Cuadrante Inferior Izquierdo (0, mitad de la altura)
 Write-Host "[3/4] Ventana inferior izquierda - dashboard (npm run dev)" -ForegroundColor Cyan
-$window3 = Start-QuadrantWindow -X 0 -Y $quadrantHeight `
-    -WorkingDirectory "C:\work\work\Context Bot V2\bot-ventas-whatsapp\dashboard" `
-    -Command "npm run dev"
+$window3 = Start-QuadrantWindow -X 0 -Y $quadrantHeight -WorkingDirectory "C:\work\work\Context Bot V2\bot-ventas-whatsapp\dashboard" -Command "npm run dev"
 
 Start-Sleep -Milliseconds 300
 
 # Cuadrante Inferior Derecho (mitad del ancho, mitad de la altura)
 Write-Host "[4/4] Ventana inferior derecha - webapp-cart (npm run dev)" -ForegroundColor Cyan
-$window4 = Start-QuadrantWindow -X $quadrantWidth -Y $quadrantHeight `
-    -WorkingDirectory "C:\work\work\Context Bot V2\bot-ventas-whatsapp\webapp-cart" `
-    -Command "npm run dev"
+$window4 = Start-QuadrantWindow -X $quadrantWidth -Y $quadrantHeight -WorkingDirectory "C:\work\work\Context Bot V2\bot-ventas-whatsapp\webapp-cart" -Command "npm run dev"
 
 Write-Host ""
 Write-Host "¡Todas las ventanas han sido iniciadas!" -ForegroundColor Green
