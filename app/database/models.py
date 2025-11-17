@@ -437,3 +437,118 @@ class Settings(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }
+
+
+# ============================================
+# MODELOS DE SISTEMA Y MONITOREO
+# ============================================
+
+class BotStatus(Base):
+    """
+    Estado del bot y sistema de comunicación con WAHA
+
+    Rastrea el estado de salud del bot y detecta problemas de
+    comunicación con WAHA.
+
+    Estados posibles:
+    - online: Todo funcionando correctamente
+    - degraded: Algunos fallos pero bot responde
+    - incommunicado_critico: Pérdida total de comunicación
+    - offline: Bot detenido
+    """
+
+    __tablename__ = "bot_status"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+
+    # Estado actual del bot
+    status = Column(String(50), default="online", nullable=False)  # online/degraded/incommunicado_critico/offline
+
+    # Razón del estado actual
+    reason = Column(Text, nullable=True)
+
+    # Timestamps de comunicación con WAHA
+    last_update = Column(DateTime, default=datetime.utcnow, nullable=False)
+    waha_last_success = Column(DateTime, nullable=True)  # Última vez que WAHA respondió exitosamente
+
+    # Contador de fallos consecutivos
+    waha_consecutive_failures = Column(Integer, default=0)
+
+    # Metadata adicional
+    metadata = Column(JSON, default=dict)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<BotStatus {self.status} - {self.reason[:50] if self.reason else 'No reason'}>"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "status": self.status,
+            "reason": self.reason,
+            "last_update": self.last_update.isoformat() if self.last_update else None,
+            "waha_last_success": self.waha_last_success.isoformat() if self.waha_last_success else None,
+            "waha_consecutive_failures": self.waha_consecutive_failures,
+            "metadata": self.metadata,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class CommunicationFailure(Base):
+    """
+    Registro de fallos de comunicación con WAHA
+
+    Cada vez que el bot no puede comunicarse con WAHA después de
+    reintentos, se crea un registro para rastrear y diagnosticar el problema.
+
+    Tipos de fallo:
+    - WEBHOOK_ONLY: Solo el webhook falló, diagnóstico alcanzó al usuario/admin
+    - TOTAL_COMMUNICATION_LOSS: Pérdida total, ni usuario ni admin alcanzables
+    """
+
+    __tablename__ = "communication_failures"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+
+    # Tipo de fallo
+    failure_type = Column(String(50), nullable=False)  # WEBHOOK_ONLY / TOTAL_COMMUNICATION_LOSS
+
+    # Orden afectada
+    order_id = Column(String, ForeignKey("orders.id"), nullable=True, index=True)
+
+    # Cliente afectado
+    customer_phone = Column(String(50), nullable=True)
+
+    # Resultados del diagnóstico
+    diagnostic_user_reached = Column(Boolean, default=False)  # ¿Se alcanzó al usuario en diagnóstico?
+    diagnostic_admin_reached = Column(Boolean, default=False)  # ¿Se alcanzó al admin en diagnóstico?
+
+    # Resolución
+    resolved_at = Column(DateTime, nullable=True)
+    resolution_method = Column(String(50), nullable=True)  # manual_contact / bot_recovered / auto_recovery
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relación con orden
+    order = relationship("Order", backref="communication_failures")
+
+    def __repr__(self):
+        status = "resolved" if self.resolved_at else "pending"
+        return f"<CommunicationFailure {self.failure_type} - Order {self.order_id} ({status})>"
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "failure_type": self.failure_type,
+            "order_id": self.order_id,
+            "customer_phone": self.customer_phone,
+            "diagnostic_user_reached": self.diagnostic_user_reached,
+            "diagnostic_admin_reached": self.diagnostic_admin_reached,
+            "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
+            "resolution_method": self.resolution_method,
+            "created_at": self.created_at.isoformat() if self.created_at else None
+        }

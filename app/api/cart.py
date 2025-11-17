@@ -633,34 +633,35 @@ async def complete_cart(
             if not success1 and not success2:
                 logger.critical(f"🚨 CRÍTICO: No se pudo comunicar con WAHA después de 4 intentos para orden {order.order_number}")
                 logger.critical(f"   Customer: {phone}, Order: {order.id}")
-                
-                # TODO: Implementar notificación al panel de administrador
-                # - Mostrar alerta en dashboard admin
-                # - Enviar email/SMS al administrador
-                # - Mostrar órdenes "sin notificar" en sección especial
-                # Ejemplo:
-                # await admin_notification_service.notify_communication_failure(
-                #     order_id=order.id,
-                #     customer_phone=phone,
-                #     error_type="WAHA_UNREACHABLE"
-                # )
-                
-                # TODO: Actualizar estado del bot a "incomunicado"
-                # - Agregar tabla bot_status (status: online/offline/degraded/incommunicado)
-                # - Actualizar: bot_status.status = "incommunicado"
-                # - Guardar timestamp del último fallo
-                # - Dashboard muestra estado del bot en tiempo real
-                # - Lógica de recuperación automática cuando WAHA vuelve
-                # Ejemplo:
-                # from app.services.bot_status_service import bot_status_service
-                # await bot_status_service.update_status(
-                #     status="incommunicado",
-                #     reason="Failed to reach WAHA after 4 retries",
-                #     affected_orders=[order.id]
-                # )
-                
-                # Por ahora, solo logging crítico
-                pass
+
+                # 🔍 DIAGNÓSTICO: ¿Bot comunicado o pérdida total?
+                try:
+                    from app.services.communication_diagnostic_service import CommunicationDiagnosticService
+
+                    diagnostic_service = CommunicationDiagnosticService(db)
+
+                    diagnostic_result = await diagnostic_service.diagnose_after_webhook_failure(
+                        order_id=order.id,
+                        customer_phone=phone,
+                        order_number=order.order_number
+                    )
+
+                    logger.info(f"📊 Resultado del diagnóstico:")
+                    logger.info(f"   Bot alcanzable: {diagnostic_result['bot_reachable']}")
+                    logger.info(f"   Usuario alcanzado: {diagnostic_result['user_reached']}")
+                    logger.info(f"   Admin alcanzado: {diagnostic_result['admin_reached']}")
+                    logger.info(f"   Tipo de fallo: {diagnostic_result['failure_type']}")
+                    logger.info(f"   Estado del bot: {diagnostic_result['status']}")
+
+                    # TODO (Futuro): Si pérdida total, notificar por canales alternativos
+                    # - Email urgente al admin
+                    # - SMS al admin
+                    # - Webhook a sistema de monitoreo externo
+
+                except Exception as diag_error:
+                    logger.critical(f"🚨 Error en diagnóstico: {diag_error}", exc_info=True)
+                    # Si el diagnóstico falla, asumir pérdida total por seguridad
+                    logger.critical("🚨 Asumiendo pérdida total de comunicación por error en diagnóstico")
             
         except Exception as e:
             logger.error(f"⚠️ Error enviando mensajes iniciales: {e}")
